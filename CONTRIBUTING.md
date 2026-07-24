@@ -148,7 +148,9 @@ long form, including the parity questions. Delete any section that doesn't apply
 - Add a bullet to the `## [Unreleased]` section of `CHANGELOG.md` for anything user-visible. Skip it for internal
   refactors, test-only changes, and CI tweaks.
 - Don't bump the version in your PR — that happens once, at release.
-- Keep `just check` green.
+- **Run `just check` and keep it green.** CI does not run on PRs into `development` — it runs at the promotion
+  boundary, on PRs into `main` — so your local run is the only thing standing between a broken commit and the release
+  branch. If you want a CI tick anyway, dispatch the `CI` workflow against your branch from the Actions tab.
 - Explain *why* in the PR description. The what is visible in the diff.
 
 ## Releasing
