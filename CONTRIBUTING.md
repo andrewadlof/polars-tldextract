@@ -109,6 +109,9 @@ bump.
 
 ## Pull requests
 
+Opening a PR pre-fills [the pull request template](.github/pull_request_template.md) — it is the checklist below in
+long form, including the parity questions. Delete any section that doesn't apply.
+
 - Branch from `main`.
 - Add a bullet to the `## [Unreleased]` section of `CHANGELOG.md` for anything user-visible. Skip it for internal
   refactors, test-only changes, and CI tweaks.
