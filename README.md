@@ -120,17 +120,25 @@ Every expression takes the same `include_private` keyword.
 
 ## Performance
 
-200,000 URLs on an 8-core machine (`just bench` reproduces this):
+200,000 URLs, measured with `just bench`:
 
-| | throughput |
-| --- | ---: |
-| `tldextract` via `Expr.map_elements` | 104k rows/s |
-| `polars_tldextract`, `parallel=False` | 2.9M rows/s |
-| `polars_tldextract`, `parallel=True` | 13.6M rows/s |
+| | throughput | vs. `map_elements` |
+| --- | ---: | ---: |
+| `tldextract` via `Expr.map_elements` | 78k rows/s | — |
+| `polars_tldextract`, `parallel=False` | 2.06M rows/s | 26.5× |
+| `polars_tldextract`, `parallel=True` | 19.6M rows/s | 250.7× |
+
+<sub>AMD Ryzen 9 3950X (16 cores / 32 threads), 31 GB RAM, Linux 6.18 (WSL2), Python 3.12.13, Polars 1.43.</sub>
+
+Measure a **release build**. `just bench` builds one; a plain `maturin develop` is unoptimized and roughly 15× slower
+on this workload, which measures the profile rather than the code.
 
 Columns of 100k rows or more are split across [rayon](https://docs.rs/rayon) threads; pass `parallel=False` to force
 single-threaded. The threshold sits above the streaming engine's morsel size, so when Polars is already calling the
 plugin from several of its own worker threads each call stays single-threaded rather than nesting a fan-out inside it.
+
+The parallel figure scales with core count — 250× reflects 32 threads, and a 4-core laptop will land far below it. The
+single-threaded number is the one to reason about when Polars is already saturating your cores.
 
 A caveat worth stating plainly: if your column has far fewer distinct URLs than rows, a `dict` built over
 `Series.unique()` plus `replace_strict` can still beat any per-row approach, including this one. This package wins on

@@ -24,9 +24,10 @@ if TYPE_CHECKING:
 
 ROWS = 200_000
 
-# The `map_elements` path must beat this by a wide margin for the
-# rewrite to be worth the native dependency. Measured at ~90k rows/s on
-# the reference machine.
+# The `map_elements` path must beat this by a wide margin for the rewrite to be
+# worth the native dependency. The reference machine measures ~78k rows/s
+# through `map_elements` against ~2.06M single-threaded, a 26.5x margin, so the
+# floor leaves room for a slower or busier host before it starts crying wolf.
 MIN_SPEEDUP = 20.0
 
 pytestmark = pytest.mark.bench
