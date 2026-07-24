@@ -125,5 +125,9 @@ def test_throughput_vs_map_elements(
 
     assert baseline / serial > MIN_SPEEDUP, (
         f"plugin is only {baseline / serial:.1f}x faster than map_elements; "
-        f"expected at least {MIN_SPEEDUP}x"
+        f"expected at least {MIN_SPEEDUP}x. If this is far below the floor "
+        f"rather than just under it, check that the installed extension is an "
+        f"optimized build: `maturin develop` without `--release` is ~15x "
+        f"slower here, which measures the profile rather than the code. "
+        f"`just bench` builds the right one."
     )

@@ -25,6 +25,14 @@ default:
 dev:
     uv run maturin develop --uv
 
+# Build it optimized instead. Correctness tests do not care, but anything
+# measuring throughput does: a debug build is ~15x slower on this workload, so
+# benching one compares an unoptimized plugin against an optimized tldextract
+# and reports a meaningless ratio.
+[group('dev')]
+dev-release:
+    uv run maturin develop --uv --release
+
 # Run the Rust unit tests and the Python suite
 [group('dev')]
 test *args: dev
@@ -37,8 +45,11 @@ test_cov *args: dev
     uv run pytest --cov=polars_tldextract --cov-report=term-missing --cov-branch {{args}}
 
 # Throughput: this plugin vs. tldextract through map_elements
+#
+# Depends on `dev-release`, not `dev`. It leaves an optimized build installed,
+# so run `just dev` afterwards to get back to a fast edit-test loop.
 [group('dev')]
-bench: dev
+bench: dev-release
     uv run pytest tests/test_bench.py -s -m bench
 
 # Re-vendor the Public Suffix List from publicsuffix.org
