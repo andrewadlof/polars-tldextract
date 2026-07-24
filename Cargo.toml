@@ -31,7 +31,10 @@ crate-type = ["cdylib", "rlib"]
 # link libpython, which is right for the wheel but leaves `cargo test`'s test
 # binary with unresolved symbols. maturin turns it on via `[tool.maturin]
 # features` when it builds the wheel.
-pyo3 = { version = "0.28", features = ["abi3-py310"] }
+# `generate-import-lib` synthesizes the `python3` import library at build time
+# rather than requiring one from a real interpreter install, which is what the
+# Windows arm64 cross-build needs -- the runner is x64 and has no arm64 Python.
+pyo3 = { version = "0.28", features = ["abi3-py310", "generate-import-lib"] }
 # pyo3-polars 0.27 <-> polars-rs 0.54.4 <-> py-polars 1.42.x. The plugin FFI ABI
 # is (0, 1) and unchanged since py-polars 1.37, so one build spans the whole
 # `polars>=1.37.1` range the consuming projects pin.
