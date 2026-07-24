@@ -84,8 +84,8 @@ def extract(
     include_private : bool, default False
         Whether to treat the PSL's private section as suffixes, matching
         `tldextract`'s `include_psl_private_domains`. With the default,
-        `waiterrant.blogspot.com` has suffix `com`; with `True` it has suffix
-        `blogspot.com`.
+        `pola-rs.github.io` has suffix `io`; with `True` it has suffix
+        `github.io`.
     parallel : bool, default True
         Whether the plugin may split large columns across rayon threads.
         Columns below 100k rows run single-threaded regardless.
@@ -171,7 +171,7 @@ def subdomain(
     include_private: bool = False,
     parallel: bool = True,
 ) -> pl.Expr:
-    """Extract the subdomain, e.g. `"www"` from `"www.example.com"`.
+    """Extract the subdomain, e.g. `"www"` from `"www.bbc.co.uk"`.
 
     Parameters
     ----------
@@ -198,7 +198,7 @@ def top_domain(
     include_private: bool = False,
     parallel: bool = True,
 ) -> pl.Expr:
-    """Extract the registrable label, e.g. `"example"` from `"example.co.uk"`.
+    """Extract the registrable label, e.g. `"bbc"` from `"bbc.co.uk"`.
 
     Named `top_domain` rather than `domain` because `domain` reads as the whole
     hostname to most callers; this is `tldextract`'s `domain` field.
@@ -228,7 +228,7 @@ def suffix(
     include_private: bool = False,
     parallel: bool = True,
 ) -> pl.Expr:
-    """Extract the public suffix, e.g. `"co.uk"` from `"example.co.uk"`.
+    """Extract the public suffix, e.g. `"co.uk"` from `"bbc.co.uk"`.
 
     Parameters
     ----------

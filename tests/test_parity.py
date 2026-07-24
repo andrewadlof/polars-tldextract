@@ -26,17 +26,18 @@ if TYPE_CHECKING:
 # Hand-picked cases covering each branch of the algorithm.
 EDGE_CASES = [
     # Schemes, paths, queries, fragments, ports, userinfo.
-    "https://www.example.com/about?q=1#frag",
-    "http://example.com",
-    "//example.com/x",
-    "ftp://user:pw@example.com:2121/pub",
-    "git+ssh://example.com",
-    "example.com:8080",
-    "ht_tp://example.com",
-    "example.com//not-a-scheme",
+    "https://www.nytimes.com/section/world?q=1#frag",
+    "http://github.com",
+    "//cdn.jsdelivr.net/x",
+    "ftp://user:pw@ftp.gnu.org:2121/pub",
+    "git+ssh://github.com",
+    "github.com:8080",
+    "ht_tp://github.com",
+    "github.com//not-a-scheme",
     # Multi-label and unknown suffixes.
-    "sub.acme.co.uk",
-    "widgets.com.au",
+    "news.bbc.co.uk",
+    "qantas.com.au",
+    "printer.local",
     "foo.invalidtldthatwillneverexist",
     "localhost",
     "com",
@@ -47,8 +48,9 @@ EDGE_CASES = [
     "foo.www.ck",
     "bar.ck",
     # Private section.
+    "pola-rs.github.io",
+    "github.io",
     "waiterrant.blogspot.com",
-    "blogspot.com",
     # IP addresses.
     "127.0.0.1",
     "http://127.0.0.1:8080/x",
@@ -60,18 +62,18 @@ EDGE_CASES = [
     "[::ffff:1.2.3.4]",
     "[not-an-ipv6]",
     # Dots: trailing root labels and the three non-ASCII separators.
-    "example.com.",
-    "example.com...",
-    "www。example．com｡",
-    "example。com",
+    "github.com.",
+    "github.com...",
+    "www。github．com｡",
+    "github。com",
     # IDN, both spellings.
     "пример.рф",
     "xn--e1afmkfd.xn--p1ai",
     "bücher.de",
     "xn--bcher-kva.de",
     # Casing.
-    "WWW.EXAMPLE.COM",
-    "Example.Co.Uk",
+    "WWW.GITHUB.COM",
+    "BBC.Co.Uk",
     # Degenerate input.
     "",
     "   ",
@@ -80,27 +82,27 @@ EDGE_CASES = [
     "..",
     "@",
     "http://",
-    "://example.com",
+    "://github.com",
 ]
 
 # Lifted from the consuming pipeline's regression fixtures so the migration is
 # covered by the same corpus that guards it downstream.
 PIPELINE_FIXTURES = [
-    "https://www.acme.com/about",
-    "acme.com",
-    "ACME.COM",
+    "https://www.cloudflare.com/products",
+    "cloudflare.com",
+    "CLOUDFLARE.COM",
     "  ",
     "",
-    "sub.acme.co.uk",
-    "foo.io",
+    "news.bbc.co.uk",
+    "keras.io",
     "not a url",
-    "http://mail.acme.io",
+    "http://mail.google.com",
     "bücher.de",
-    "https://enterprise.example.org",
-    "widgets.com.au",
-    "bar.net",
-    "zeta.co",
-    "mail.acme.co.uk",
+    "https://en.wikipedia.org",
+    "qantas.com.au",
+    "www.speedtest.net",
+    "t.co",
+    "mail.bbc.co.uk",
 ]
 
 
@@ -244,7 +246,7 @@ def test_random_urls(reference: tldextract_mod.TLDExtract) -> None:
     schemes = ["", "http://", "https://", "//", "ftp://"]
     userinfos = ["", "user@", "user:pw@"]
     subs = ["", "www.", "a.b.", "mail.", "почта."]
-    slds = ["example", "acme", "bücher", "xn--bcher-kva", "123", "a-b"]
+    slds = ["wikipedia", "github", "bücher", "xn--bcher-kva", "123", "a-b"]
     sufs = [
         "com",
         "co.uk",
@@ -285,9 +287,9 @@ def test_scalar_matches_expression(*, include_private: bool) -> None:
 
 def test_scalar_null_semantics() -> None:
     """`extract_scalar` collapses absent parts to `None`, like the pipeline."""
-    assert tld.extract_scalar("https://www.example.co.uk/") == (
-        "example.co.uk",
-        "example",
+    assert tld.extract_scalar("https://www.bbc.co.uk/news") == (
+        "bbc.co.uk",
+        "bbc",
         "co.uk",
     )
     assert tld.extract_scalar(None) == (None, None, None)
@@ -300,15 +302,13 @@ def test_scalar_null_semantics() -> None:
 
 def test_private_section_is_opt_in() -> None:
     """Default behavior matches `TLDExtract()`, not `include_private=True`."""
-    assert tld.extract_scalar("waiterrant.blogspot.com") == (
-        "blogspot.com",
-        "blogspot",
-        "com",
+    assert tld.extract_scalar("pola-rs.github.io") == (
+        "github.io",
+        "github",
+        "io",
     )
-    assert tld.extract_scalar(
-        "waiterrant.blogspot.com", include_private=True
-    ) == (
-        "waiterrant.blogspot.com",
-        "waiterrant",
-        "blogspot.com",
+    assert tld.extract_scalar("pola-rs.github.io", include_private=True) == (
+        "pola-rs.github.io",
+        "pola-rs",
+        "github.io",
     )

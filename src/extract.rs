@@ -169,15 +169,15 @@ mod tests {
 
     #[test]
     fn simple_and_multi_label_suffixes() {
-        assert_eq!(parts("http://www.example.com/x"), t("www", "example", "com"));
-        assert_eq!(parts("sub.acme.co.uk"), t("sub", "acme", "co.uk"));
-        assert_eq!(parts("example.com"), t("", "example", "com"));
+        assert_eq!(parts("http://www.nytimes.com/x"), t("www", "nytimes", "com"));
+        assert_eq!(parts("news.bbc.co.uk"), t("news", "bbc", "co.uk"));
+        assert_eq!(parts("github.com"), t("", "github", "com"));
         assert_eq!(parts("com"), t("", "", "com"));
     }
 
     #[test]
     fn unknown_suffix_keeps_last_label_as_domain() {
-        assert_eq!(parts("foo.invalidtld"), t("foo", "invalidtld", ""));
+        assert_eq!(parts("printer.local"), t("printer", "local", ""));
         assert_eq!(parts("localhost"), t("", "localhost", ""));
         assert_eq!(parts(""), t("", "", ""));
         assert_eq!(parts("   "), t("", "", ""));
@@ -198,10 +198,10 @@ mod tests {
 
     #[test]
     fn private_section_is_opt_in() {
-        assert_eq!(parts("waiterrant.blogspot.com"), t("waiterrant", "blogspot", "com"));
+        assert_eq!(parts("pola-rs.github.io"), t("pola-rs", "github", "io"));
         assert_eq!(
-            parts_private("waiterrant.blogspot.com"),
-            ("".to_owned(), "waiterrant".to_owned(), "blogspot.com".to_owned(), true)
+            parts_private("pola-rs.github.io"),
+            ("".to_owned(), "pola-rs".to_owned(), "github.io".to_owned(), true)
         );
     }
 
@@ -215,7 +215,7 @@ mod tests {
 
     #[test]
     fn casing_and_idn_are_preserved_in_output() {
-        assert_eq!(parts("WWW.EXAMPLE.COM"), t("WWW", "EXAMPLE", "COM"));
+        assert_eq!(parts("WWW.GITHUB.COM"), t("WWW", "GITHUB", "COM"));
         // Unicode and punycode spellings of the same suffix both resolve, and
         // the output keeps whichever spelling came in.
         assert_eq!(parts("пример.рф"), t("", "пример", "рф"));
@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn ideographic_dots_are_label_separators() {
-        assert_eq!(parts("www\u{3002}example\u{ff0e}com"), t("www", "example", "com"));
+        assert_eq!(parts("www\u{3002}github\u{ff0e}com"), t("www", "github", "com"));
     }
 
     #[test]
