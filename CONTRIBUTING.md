@@ -131,11 +131,33 @@ just publish          # upload to PyPI
 
 That builds a wheel for the host platform only. **The real release is cut by CI**: push a `v*` tag and
 `.github/workflows/release.yml` builds the full matrix — Linux glibc and musl on x86_64 and aarch64, macOS on Intel
-and Apple Silicon, Windows on x64 and arm64, plus an sdist — then publishes via PyPI Trusted Publishing.
+and Apple Silicon, Windows on x64 and arm64, plus an sdist — then uploads it to PyPI.
 
 Run that workflow manually (`workflow_dispatch`) first. It builds and smoke-tests everything but skips publishing, so
 the matrix can be rehearsed without burning a version number — PyPI releases are immutable, and a broken wheel can
 only be yanked, never replaced.
+
+### Publishing credentials
+
+CI authenticates with a PyPI API token held as the `PYPI_API_TOKEN` secret on the repository's **`pypi` environment**,
+so only the `publish` job can read it and any reviewers configured on that environment gate the upload:
+
+```bash
+gh secret set PYPI_API_TOKEN --env pypi     # paste the token at the prompt
+```
+
+Set it with the prompt rather than as an argument — a token on a command line lands in your shell history.
+
+A project's *first* upload needs an **account-scoped** token, because PyPI only issues project-scoped tokens for
+projects that already exist. Straight after that first release, create a project-scoped token, replace the secret, and
+revoke the account-scoped one.
+
+For a manual `just publish`, `uv publish` reads `UV_PUBLISH_TOKEN` from the environment:
+
+```bash
+read -rs UV_PUBLISH_TOKEN && export UV_PUBLISH_TOKEN   # not `export X=...`, again for history
+just publish
+```
 
 `just build` uses `--zig` to link against an old glibc so the local wheel runs on `manylinux2014` hosts without a
 container; CI builds inside the manylinux containers instead and does not need it. Run it through `uv run` (the
