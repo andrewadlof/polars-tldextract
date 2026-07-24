@@ -145,26 +145,26 @@ mod tests {
 
     #[test]
     fn schemeless_strips_only_real_schemes() {
-        assert_eq!(schemeless_url("http://example.com/x"), "example.com/x");
-        assert_eq!(schemeless_url("//example.com"), "example.com");
-        assert_eq!(schemeless_url("git+ssh://example.com"), "example.com");
+        assert_eq!(schemeless_url("http://github.com/x"), "github.com/x");
+        assert_eq!(schemeless_url("//github.com"), "github.com");
+        assert_eq!(schemeless_url("git+ssh://github.com"), "github.com");
         // No colon before the `//`, so it is not a scheme.
-        assert_eq!(schemeless_url("example.com//x"), "example.com//x");
+        assert_eq!(schemeless_url("github.com//x"), "github.com//x");
         // `_` is not a scheme character.
-        assert_eq!(schemeless_url("ht_tp://example.com"), "ht_tp://example.com");
+        assert_eq!(schemeless_url("ht_tp://github.com"), "ht_tp://github.com");
         // Too few characters ahead of `//` for a scheme plus colon.
-        assert_eq!(schemeless_url(":://example.com"), ":://example.com");
-        assert_eq!(schemeless_url("example.com"), "example.com");
+        assert_eq!(schemeless_url(":://github.com"), ":://github.com");
+        assert_eq!(schemeless_url("github.com"), "github.com");
     }
 
     #[test]
     fn lenient_netloc_matches_python() {
-        assert_eq!(lenient_netloc("http://www.example.com/path?q=1#f"), "www.example.com");
-        assert_eq!(lenient_netloc("http://user:pw@www.example.com:8080/"), "www.example.com");
+        assert_eq!(lenient_netloc("http://www.github.com/path?q=1#f"), "www.github.com");
+        assert_eq!(lenient_netloc("http://user:pw@www.github.com:8080/"), "www.github.com");
         assert_eq!(lenient_netloc("http://[2001:db8::1]:80/x"), "[2001:db8::1]");
-        assert_eq!(lenient_netloc("example.com..."), "example.com");
-        assert_eq!(lenient_netloc("example.com\u{3002}"), "example.com");
-        assert_eq!(lenient_netloc("  example.com  "), "example.com");
+        assert_eq!(lenient_netloc("github.com..."), "github.com");
+        assert_eq!(lenient_netloc("github.com\u{3002}"), "github.com");
+        assert_eq!(lenient_netloc("  github.com  "), "github.com");
         assert_eq!(lenient_netloc(""), "");
         assert_eq!(lenient_netloc("not a url"), "not a url");
     }

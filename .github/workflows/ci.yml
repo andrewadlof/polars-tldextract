@@ -109,10 +109,10 @@ jobs:
           python -m pip install dist/*.whl
           python -c "
           import polars as pl, polars_tldextract as tld
-          assert tld.extract_scalar('https://a.example.co.uk/x') == (
-              'example.co.uk', 'example', 'co.uk')
-          assert pl.DataFrame({'u': ['a.example.co.uk']}).select(
-              tld.registrable_domain('u'))['u'][0] == 'example.co.uk'
+          assert tld.extract_scalar('https://www.bbc.co.uk/news') == (
+              'bbc.co.uk', 'bbc', 'co.uk')
+          assert pl.DataFrame({'u': ['news.bbc.co.uk']}).select(
+              tld.registrable_domain('u'))['u'][0] == 'bbc.co.uk'
           print('ok, psl', tld.psl_version())
           "
 

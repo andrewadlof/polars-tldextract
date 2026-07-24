@@ -13,8 +13,8 @@ import polars as pl
 import pytest
 
 URLS = [
-    "https://www.example.co.uk/about",
-    "acme.com",
+    "https://www.bbc.co.uk/news",
+    "github.com",
     "127.0.0.1",
     "com",
     None,
@@ -32,8 +32,8 @@ def test_parts_dtype_and_null_semantics() -> None:
     assert out.columns == ["full_domain", "sld", "tld"]
     assert out.dtypes == [pl.String, pl.String, pl.String]
     assert out["full_domain"].to_list() == [
-        "example.co.uk",
-        "acme.com",
+        "bbc.co.uk",
+        "github.com",
         None,  # an IP has no registrable domain
         None,  # a bare suffix has no registrable label
         None,  # null in, null out
@@ -55,8 +55,8 @@ def test_extract_dtype_and_empty_string_semantics() -> None:
     )
     assert out.columns == ["subdomain", "domain", "suffix", "is_private"]
     assert out.dtypes == [pl.String, pl.String, pl.String, pl.Boolean]
-    # Row 1 ("acme.com") has no subdomain: empty string, not null.
-    assert out.row(1) == ("", "acme", "com", False)
+    # Row 1 ("github.com") has no subdomain: empty string, not null.
+    assert out.row(1) == ("", "github", "com", False)
     # Row 4 is null input, so every field is null.
     assert out.row(4) == (None, None, None, None)
 
@@ -124,7 +124,9 @@ def test_works_inside_list_eval() -> None:
     The consuming pipeline needs this to normalize comma-separated domain
     lists without leaving Polars.
     """
-    df = pl.DataFrame({"x": ["mail.acme.co.uk,ACME.COM,acme.com", None, ""]})
+    df = pl.DataFrame({
+        "x": ["mail.bbc.co.uk,GITHUB.COM,github.com", None, ""]
+    })
     out = df.select(
         pl
         .col("x")
@@ -136,7 +138,7 @@ def test_works_inside_list_eval() -> None:
         .list.join(",")
         .alias("out")
     )
-    assert out["out"].to_list() == ["acme.co.uk,acme.com", None, ""]
+    assert out["out"].to_list() == ["bbc.co.uk,github.com", None, ""]
 
 
 def test_works_in_lazy_and_streaming() -> None:
@@ -153,7 +155,7 @@ def test_works_in_lazy_and_streaming() -> None:
 def test_works_in_group_by_and_filter() -> None:
     """Being elementwise, it works in aggregation and predicate contexts."""
     df = pl.DataFrame({
-        "u": ["a.example.com", "b.example.com", "c.other.org"],
+        "u": ["news.bbc.co.uk", "www.bbc.co.uk", "en.wikipedia.org"],
         "n": [1, 2, 3],
     })
     grouped = (
@@ -162,7 +164,7 @@ def test_works_in_group_by_and_filter() -> None:
         .agg(pl.col("n").sum())
         .sort("domain")
     )
-    assert grouped["domain"].to_list() == ["example.com", "other.org"]
+    assert grouped["domain"].to_list() == ["bbc.co.uk", "wikipedia.org"]
     assert grouped["n"].to_list() == [3, 3]
 
     filtered = df.filter(tld.suffix("u") == "org")

@@ -17,6 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The Windows arm64 wheel now builds. pyo3's `generate-import-lib` feature synthesizes the `python3` import library at
+  build time, which the cross-build needs because the runner is x64 and has no arm64 Python to link against.
+
 ## [0.1.0] - 2026-07-24
 
 ### Added

@@ -5,8 +5,9 @@
 
 Accurate URL domain parsing for [Polars](https://pola.rs), as a native Rust expression plugin.
 
-Splitting a hostname into subdomain / domain / public suffix is not a string operation. `example.co.uk` and
-`example.com.foo` look identical to a regex, but only one of them has `co.uk` as its suffix. Getting it right requires
+Splitting a hostname into subdomain / domain / public suffix is not a string operation. `www.bbc.co.uk` and
+`blog.cloudflare.com` look identical to a regex, but the registrable domain is `bbc.co.uk` in one and
+`cloudflare.com` in the other — "last two labels" is wrong half the time. Getting it right requires
 the [Public Suffix List](https://publicsuffix.org/), and in Python that means
 [`tldextract`](https://github.com/john-kurkowski/tldextract) — an excellent library, but a Python function. Inside
 Polars it can only be driven through `Expr.map_elements`, one interpreter round-trip per row.
@@ -20,9 +21,9 @@ import polars_tldextract as tld
 
 df = pl.DataFrame({
     "url": [
-        "https://www.example.co.uk/about?x=1",
-        "acme.com",
-        "http://user:pw@sub.acme.blogspot.com:8080/",
+        "https://www.bbc.co.uk/news/technology",
+        "github.com",
+        "https://blog.cloudflare.com:443/page/2/",
         "127.0.0.1",
         None,
     ]
@@ -32,15 +33,15 @@ df.with_columns(tld.parts("url").alias("d")).unnest("d")
 ```
 
 ```text
-┌────────────────────────────────────────────┬───────────────┬───────────┬───────┐
-│ url                                        ┆ full_domain   ┆ sld       ┆ tld   │
-╞════════════════════════════════════════════╪═══════════════╪═══════════╪═══════╡
-│ https://www.example.co.uk/about?x=1        ┆ example.co.uk ┆ example   ┆ co.uk │
-│ acme.com                                   ┆ acme.com      ┆ acme      ┆ com   │
-│ http://user:pw@sub.acme.blogspot.com:8080/ ┆ blogspot.com  ┆ blogspot  ┆ com   │
-│ 127.0.0.1                                  ┆ null          ┆ 127.0.0.1 ┆ null  │
-│ null                                       ┆ null          ┆ null      ┆ null  │
-└────────────────────────────────────────────┴───────────────┴───────────┴───────┘
+┌─────────────────────────────────────────┬────────────────┬────────────┬───────┐
+│ url                                     ┆ full_domain    ┆ sld        ┆ tld   │
+╞═════════════════════════════════════════╪════════════════╪════════════╪═══════╡
+│ https://www.bbc.co.uk/news/technology   ┆ bbc.co.uk      ┆ bbc        ┆ co.uk │
+│ github.com                              ┆ github.com     ┆ github     ┆ com   │
+│ https://blog.cloudflare.com:443/page/2/ ┆ cloudflare.com ┆ cloudflare ┆ com   │
+│ 127.0.0.1                               ┆ null           ┆ 127.0.0.1  ┆ null  │
+│ null                                    ┆ null           ┆ null       ┆ null  │
+└─────────────────────────────────────────┴────────────────┴────────────┴───────┘
 ```
 
 ## Install
@@ -95,11 +96,11 @@ df.filter(pl.col("url").tld.suffix() == "org")
 For code that isn't holding a DataFrame — the same Rust core, no Polars round-trip:
 
 ```python
-tld.extract_scalar("https://www.example.co.uk/")
-# ('example.co.uk', 'example', 'co.uk')       nulls for absent parts
+tld.extract_scalar("https://www.bbc.co.uk/news")
+# ('bbc.co.uk', 'bbc', 'co.uk')         nulls for absent parts
 
-tld.extract_scalar_full("https://www.example.co.uk/")
-# ('www', 'example', 'co.uk', False)          tldextract-faithful
+tld.extract_scalar_full("https://www.bbc.co.uk/news")
+# ('www', 'bbc', 'co.uk', False)        tldextract-faithful
 ```
 
 ### Private suffixes
@@ -108,11 +109,11 @@ The Public Suffix List has an ICANN section and a private section. Like `tldextr
 default:
 
 ```python
-tld.extract_scalar("waiterrant.blogspot.com")
-# ('blogspot.com', 'blogspot', 'com')
+tld.extract_scalar("pola-rs.github.io")
+# ('github.io', 'github', 'io')
 
-tld.extract_scalar("waiterrant.blogspot.com", include_private=True)
-# ('waiterrant.blogspot.com', 'waiterrant', 'blogspot.com')
+tld.extract_scalar("pola-rs.github.io", include_private=True)
+# ('pola-rs.github.io', 'pola-rs', 'github.io')
 ```
 
 Every expression takes the same `include_private` keyword.

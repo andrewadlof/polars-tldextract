@@ -2,9 +2,9 @@
 
 ## Why this exists
 
-Splitting a URL into subdomain / registrable domain / public suffix is not a string operation. `example.co.uk` and
-`example.com.foo` look identical to a regex; only the [Public Suffix List](https://publicsuffix.org/) (PSL) knows that
-`co.uk` is a suffix and `com.foo` is not. In Python that job belongs to
+Splitting a URL into subdomain / registrable domain / public suffix is not a string operation. `www.bbc.co.uk` and
+`blog.cloudflare.com` look identical to a regex; only the [Public Suffix List](https://publicsuffix.org/) (PSL) knows
+that the registrable domain is `bbc.co.uk` in one and `cloudflare.com` in the other. In Python that job belongs to
 [`tldextract`](https://github.com/john-kurkowski/tldextract) — but `tldextract` is a Python function, so inside Polars it
 has to be driven through `Expr.map_elements`, one interpreter round-trip per row. On a 727k-row frame that dominates the
 query.
@@ -37,7 +37,7 @@ matched suffix plus a `Type`. Three facts make them equivalent, and each one is 
 1. **`Info::typ == None` is `tldextract`'s "no suffix".** The PSL spec says an unmatched TLD gets an implicit `*` rule;
    the crate applies it and returns the last label's length with `typ: None`. `tldextract` deliberately does *not* apply
    it and returns `None` from `suffix_index`. Keying on `typ` rather than on `len` reconciles the two — this is why
-   `foo.invalidtld` yields domain `invalidtld` and an empty suffix, not suffix `invalidtld`.
+   `printer.local` yields domain `local` and an empty suffix, not suffix `local`.
 
 2. **`IcannList` is the ICANN-only trie.** `tldextract`'s default (`include_psl_private_domains=False`) uses a trie
    built without the private section. `publicsuffix::IcannList` builds one trie but rejects private leaves at lookup

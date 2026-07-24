@@ -9,7 +9,7 @@ Examples
 --------
 >>> import polars as pl
 >>> import polars_tldextract as tld
->>> df = pl.DataFrame({"url": ["https://www.example.co.uk/about", None]})
+>>> df = pl.DataFrame({"url": ["https://www.bbc.co.uk/news", None]})
 >>> df.with_columns(tld.parts("url").alias("d")).unnest("d")  # doctest: +SKIP
 >>> df.with_columns(pl.col("url").tld.registrable_domain())  # doctest: +SKIP
 
