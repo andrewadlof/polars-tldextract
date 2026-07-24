@@ -66,13 +66,14 @@ it lives in `pyproject.toml`.
 | Path | What lives there |
 | --- | --- |
 | `src/netloc.rs` | Port of `tldextract/remote.py` — scheme/path/userinfo/port stripping, IP recognition |
-| `src/psl.rs` | Loading the suffix list into the ICANN-only and ICANN+private tries |
+| `src/psl.rs` | Loading the suffix list into the ICANN-only and ICANN+private tries, and swapping it at runtime |
 | `src/extract.rs` | The algorithm itself |
 | `src/lib.rs` | Polars kernels, the rayon fan-out, the scalar Python functions |
 | `src/data/public_suffix_list.dat` | The vendored list (MPL-2.0 — see NOTICE) |
-| `python/polars_tldextract/` | Expression wrappers and the `.tld` namespace |
+| `python/polars_tldextract/` | Expression wrappers, the `.tld` namespace, and the list-refresh helpers |
 | `tests/test_parity.py` | The differential suite against `tldextract` |
 | `tests/test_expr.py` | Polars-level behavior: nulls, dtypes, composition, parallelism |
+| `tests/test_psl.py` | Replacing the list in a running process, and rejecting bad ones |
 
 [`docs/architecture/overview.md`](docs/architecture/overview.md) explains *why* the `publicsuffix` crate's API lines up
 with `tldextract`'s trie walk. Read it before touching `src/extract.rs` — the three facts it lists are each
@@ -98,10 +99,18 @@ not need a parity case — but it does need tests in `tests/test_expr.py`.
 
 ## Refreshing the Public Suffix List
 
+There are two refreshes, and they are not the same thing. This section is about the **vendored snapshot** — the list
+compiled into the binary, which changes what a released wheel returns:
+
 ```bash
 just refresh-psl   # downloads the current list into src/data/
 just check         # the parity corpus re-derives itself from the new list
 ```
+
+Users refreshing the list in *their* running process is a separate mechanism — `tld.refresh_psl()` and
+`tld.load_psl()`, implemented in `src/psl.rs` and `python/polars_tldextract/_psl.py`. That path does not touch the
+vendored file and needs no rebuild. If you change how lists are parsed or validated, both go through
+`psl::Lists::from_text`, so the marker and empty-list checks cover them together.
 
 The script verifies the ICANN and private section markers survived the download, since the parser keys on those to
 build the two tries. A list refresh changes what the package returns, so it warrants a CHANGELOG entry and a version

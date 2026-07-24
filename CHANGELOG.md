@@ -17,6 +17,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `refresh_psl()` downloads the current Public Suffix List and loads it into the running process, and `load_psl()`
+  does the same for a list you already have (a path or the text itself). Both return the new `VERSION:` stamp and
+  take effect for extractions that start after they return, so a long-lived process no longer has to restart to pick
+  up a newer list. A list that fails to parse, or that is missing the ICANN/private section markers, is rejected and
+  the working list stays in use. `refresh_psl` is the only function in the package that touches the network, and only
+  when called.
+
 ### Fixed
 
 - The Windows arm64 wheel now builds. pyo3's `generate-import-lib` feature synthesizes the `python3` import library at

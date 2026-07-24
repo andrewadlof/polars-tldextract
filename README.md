@@ -161,15 +161,40 @@ If you find an input where this package and `tldextract` disagree, that is a bug
 A snapshot of the Public Suffix List is compiled into the binary, so there is no network access, no cache directory,
 and no first-call latency spike. `tld.psl_version()` reports which snapshot is in use.
 
-To supply your own list without rebuilding, point `POLARS_TLDEXTRACT_PSL` at a `.dat` file:
+To supply your own list at startup, point `POLARS_TLDEXTRACT_PSL` at a `.dat` file:
 
 ```bash
 export POLARS_TLDEXTRACT_PSL=/path/to/public_suffix_list.dat
 ```
 
-It is read once, on first use, so set it before the first extraction. An unreadable or unparseable override raises
-rather than silently falling back to the bundled list — quietly parsing a different list than you asked for would
-produce wrong suffixes with no signal.
+It is read once, on first use, so set it before the first extraction.
+
+### Refreshing without a restart
+
+The list changes several times a week. A long-lived process — a notebook, a cluster, a service — would otherwise be
+stuck with whatever list it read when it parsed its first URL, so two functions replace it in place:
+
+```python
+# Download the current list and load it into this process.
+tld.refresh_psl()
+
+# ...and keep a copy, so the next run need not go back to the network.
+tld.refresh_psl(save_to="psl.dat")
+
+# Or load one you already have: a path, a Path, or the list text itself.
+tld.load_psl("psl.dat")
+```
+
+Both return the new `VERSION:` stamp, and take effect for every extraction that *starts* after they return. A query
+already in flight keeps the list it began with, so no single column is ever parsed against two different lists.
+
+`refresh_psl` is the only function here that touches the network, and only when you call it — importing the package
+still does nothing. Point it at an internal mirror with `tld.refresh_psl(url=...)` if outbound access is restricted.
+
+An unreadable file, an unparseable list, or one missing the `===BEGIN ICANN DOMAINS===` / `===BEGIN PRIVATE DOMAINS===`
+markers raises `ValueError` and **leaves the working list untouched**. The marker check matters more than it looks: a
+list without them parses as one undifferentiated section, and every private suffix would quietly start counting as an
+ICANN one — wrong output, no signal.
 
 ## Compatibility
 

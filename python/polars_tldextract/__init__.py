@@ -33,15 +33,19 @@ from polars_tldextract._internal import (
     psl_version,
 )
 from polars_tldextract._namespace import TldNamespace
+from polars_tldextract._psl import PSL_URL, load_psl, refresh_psl
 
 __all__ = [
     "PSL_PATH_ENV",
+    "PSL_URL",
     "TldNamespace",
     "extract",
     "extract_scalar",
     "extract_scalar_full",
+    "load_psl",
     "parts",
     "psl_version",
+    "refresh_psl",
     "registrable_domain",
     "subdomain",
     "suffix",

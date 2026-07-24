@@ -27,7 +27,7 @@ use std::borrow::Cow;
 use publicsuffix::{Psl, Type};
 
 use crate::netloc::{lenient_netloc, looks_like_ip, looks_like_ipv6, with_ascii_dots};
-use crate::psl::{full_list, icann_list};
+use crate::psl::Lists;
 
 /// A parsed URL, borrowing from the netloc it was parsed out of.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,12 +56,26 @@ pub fn with_extracted<R>(
     include_private: bool,
     f: impl FnOnce(Extracted<'_>) -> R,
 ) -> R {
+    with_extracted_in(&crate::psl::current(), url, include_private, f)
+}
+
+/// Parse `url` against a specific list snapshot and hand the result to `f`.
+///
+/// The vectorized paths take one snapshot per expression evaluation and reuse
+/// it for every row, so a list swapped in mid-query cannot make one column
+/// disagree with itself -- and so the hot path never touches the lock.
+pub fn with_extracted_in<R>(
+    psl: &Lists,
+    url: &str,
+    include_private: bool,
+    f: impl FnOnce(Extracted<'_>) -> R,
+) -> R {
     let netloc = with_ascii_dots(lenient_netloc(url));
-    f(extract_netloc(&netloc, include_private))
+    f(extract_netloc(psl, &netloc, include_private))
 }
 
 /// Parse an already-normalized netloc (scheme/path/port stripped, ASCII dots).
-fn extract_netloc(netloc: &str, include_private: bool) -> Extracted<'_> {
+fn extract_netloc<'a>(psl: &Lists, netloc: &'a str, include_private: bool) -> Extracted<'a> {
     // A bracketed IPv6 literal is reported whole, brackets included, as the
     // domain. `min_num_ipv6_chars` in the Python is 4.
     if netloc.len() >= 4
@@ -84,9 +98,9 @@ fn extract_netloc(netloc: &str, include_private: bool) -> Extracted<'_> {
         };
 
     let info = if include_private {
-        full_list().find(lookup.rsplit('.').map(str::as_bytes))
+        psl.full().find(lookup.rsplit('.').map(str::as_bytes))
     } else {
-        icann_list().find(lookup.rsplit('.').map(str::as_bytes))
+        psl.icann().find(lookup.rsplit('.').map(str::as_bytes))
     };
 
     let Some(typ) = info.typ else {
