@@ -6,10 +6,20 @@
 # version number -- PyPI releases are immutable, so a broken wheel cannot be
 # replaced, only yanked.
 #
-# Publishing uses PyPI Trusted Publishing (OIDC): there is no API token to
-# store, but the `pypi` environment must be registered as a trusted publisher
-# for this repository and workflow.
-# https://docs.pypi.org/trusted-publishers/
+# Publishing authenticates with a PyPI API token, stored as the `PYPI_API_TOKEN`
+# secret on this repository's `pypi` environment (not as a repository-wide
+# secret, so only this job can read it):
+#
+#   gh secret set PYPI_API_TOKEN --env pypi     # paste the token when prompted
+#
+# The first upload of a project needs an account-scoped token, since PyPI only
+# issues project-scoped tokens for projects that already exist. Replace it with
+# a project-scoped one after the first release, and revoke the old one.
+#
+# Trusted Publishing (OIDC) is the alternative and needs no stored secret at
+# all: register this repo/workflow/environment at
+# https://docs.pypi.org/trusted-publishers/, then drop the `password:` line
+# below and give this job `permissions: id-token: write`.
 #
 # The package is abi3-py310, so each platform needs exactly one wheel rather
 # than one per Python version; ci.yml's `abi3` job proves that wheel works on
@@ -191,19 +201,25 @@ jobs:
     # Tags publish; workflow_dispatch is a build-only rehearsal.
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    # The token lives on this environment, not on the repository, so only jobs
+    # that declare `environment: pypi` can read it -- and any reviewers or wait
+    # timer configured there gate the upload.
     environment: pypi
-    permissions:
-      id-token: write  # required for trusted publishing
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
 
+      # Every wheel and the sdist, in one place. Worth reading in the log
+      # before the upload: PyPI releases are immutable, so a missing platform
+      # or a stray file is only fixable by burning a version number.
       - name: List distributions
         run: ls -l dist
 
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
 
   github-release:
     name: GitHub release
