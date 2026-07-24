@@ -16,12 +16,14 @@ mod netloc;
 mod psl;
 
 use polars::prelude::*;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use rayon::prelude::*;
 use serde::Deserialize;
 
-use crate::extract::with_extracted;
+use crate::extract::{with_extracted, with_extracted_in};
+use crate::psl::Lists;
 
 /// Below this many rows, fanning out costs more than it saves.
 ///
@@ -125,7 +127,7 @@ impl Extracted {
     }
 }
 
-fn build_extracted(ca: &StringChunked, include_private: bool) -> Extracted {
+fn build_extracted(psl: &Lists, ca: &StringChunked, include_private: bool) -> Extracted {
     let mut subdomain = StringChunkedBuilder::new("subdomain".into(), ca.len());
     let mut domain = StringChunkedBuilder::new("domain".into(), ca.len());
     let mut suffix = StringChunkedBuilder::new("suffix".into(), ca.len());
@@ -139,7 +141,7 @@ fn build_extracted(ca: &StringChunked, include_private: bool) -> Extracted {
                 suffix.append_null();
                 is_private.append_null();
             },
-            Some(url) => with_extracted(url, include_private, |e| {
+            Some(url) => with_extracted_in(psl, url, include_private, |e| {
                 subdomain.append_value(e.subdomain);
                 domain.append_value(e.domain);
                 suffix.append_value(e.suffix);
@@ -172,7 +174,9 @@ fn extract_output(_: &[Field]) -> PolarsResult<Field> {
 #[polars_expr(output_type_func=extract_output)]
 fn tld_extract(inputs: &[Series], kwargs: ExtractKwargs) -> PolarsResult<Series> {
     let ca = inputs[0].str()?;
-    let out = build_column(ca, kwargs.parallel, |c| build_extracted(c, kwargs.include_private))?;
+    let psl = psl::current();
+    let out =
+        build_column(ca, kwargs.parallel, |c| build_extracted(&psl, c, kwargs.include_private))?;
     out.into_series(ca.name().clone())
 }
 
@@ -210,7 +214,7 @@ impl Parts {
     }
 }
 
-fn build_parts(ca: &StringChunked, include_private: bool) -> Parts {
+fn build_parts(psl: &Lists, ca: &StringChunked, include_private: bool) -> Parts {
     let mut full_domain = StringChunkedBuilder::new("full_domain".into(), ca.len());
     let mut sld = StringChunkedBuilder::new("sld".into(), ca.len());
     let mut tld = StringChunkedBuilder::new("tld".into(), ca.len());
@@ -223,7 +227,7 @@ fn build_parts(ca: &StringChunked, include_private: bool) -> Parts {
                 sld.append_null();
                 tld.append_null();
             },
-            Some(url) => with_extracted(url, include_private, |e| {
+            Some(url) => with_extracted_in(psl, url, include_private, |e| {
                 if e.domain.is_empty() {
                     sld.append_null();
                 } else {
@@ -264,7 +268,8 @@ fn parts_output(_: &[Field]) -> PolarsResult<Field> {
 #[polars_expr(output_type_func=parts_output)]
 fn tld_parts(inputs: &[Series], kwargs: ExtractKwargs) -> PolarsResult<Series> {
     let ca = inputs[0].str()?;
-    let out = build_column(ca, kwargs.parallel, |c| build_parts(c, kwargs.include_private))?;
+    let psl = psl::current();
+    let out = build_column(ca, kwargs.parallel, |c| build_parts(&psl, c, kwargs.include_private))?;
     out.into_series(ca.name().clone())
 }
 
@@ -272,13 +277,13 @@ fn tld_parts(inputs: &[Series], kwargs: ExtractKwargs) -> PolarsResult<Series> {
 // tld_registrable_domain: the single-column shortcut
 // =============================================================================
 
-fn build_registrable(ca: &StringChunked, include_private: bool) -> StringChunked {
+fn build_registrable(psl: &Lists, ca: &StringChunked, include_private: bool) -> StringChunked {
     let mut b = StringChunkedBuilder::new(ca.name().clone(), ca.len());
     let mut scratch = String::new();
     for opt in ca.iter() {
         match opt {
             None => b.append_null(),
-            Some(url) => with_extracted(url, include_private, |e| {
+            Some(url) => with_extracted_in(psl, url, include_private, |e| {
                 if e.domain.is_empty() || e.suffix.is_empty() {
                     b.append_null();
                 } else {
@@ -298,7 +303,9 @@ fn build_registrable(ca: &StringChunked, include_private: bool) -> StringChunked
 #[polars_expr(output_type=String)]
 fn tld_registrable_domain(inputs: &[Series], kwargs: ExtractKwargs) -> PolarsResult<Series> {
     let ca = inputs[0].str()?;
-    let out = build_column(ca, kwargs.parallel, |c| build_registrable(c, kwargs.include_private))?;
+    let psl = psl::current();
+    let out =
+        build_column(ca, kwargs.parallel, |c| build_registrable(&psl, c, kwargs.include_private))?;
     Ok(out.into_series())
 }
 
@@ -346,11 +353,32 @@ fn psl_version() -> String {
     psl::psl_version()
 }
 
+/// Replace the live Public Suffix List with one parsed from `text`.
+///
+/// Returns the new list's `VERSION:` stamp. Raises `ValueError` if the text is
+/// not a usable list, in which case the process keeps the list it already had.
+#[pyfunction]
+fn load_psl_text(text: &str) -> PyResult<String> {
+    psl::load_from_text(text).map_err(PyValueError::new_err)
+}
+
+/// Replace the live Public Suffix List with one read from `path`.
+///
+/// Returns the new list's `VERSION:` stamp. Raises `ValueError` if the file
+/// cannot be read or is not a usable list, in which case the process keeps the
+/// list it already had.
+#[pyfunction]
+fn load_psl_path(path: &str) -> PyResult<String> {
+    psl::load_from_path(path).map_err(PyValueError::new_err)
+}
+
 #[pymodule]
 fn _internal(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(extract_scalar, m)?)?;
     m.add_function(wrap_pyfunction!(extract_scalar_full, m)?)?;
     m.add_function(wrap_pyfunction!(psl_version, m)?)?;
+    m.add_function(wrap_pyfunction!(load_psl_text, m)?)?;
+    m.add_function(wrap_pyfunction!(load_psl_path, m)?)?;
     m.add("PSL_PATH_ENV", psl::PSL_PATH_ENV)?;
     Ok(())
 }

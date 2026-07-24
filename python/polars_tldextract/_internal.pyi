@@ -14,3 +14,9 @@ def extract_scalar_full(
 
 def psl_version() -> str:
     """Report the `VERSION:` stamp of the Public Suffix List in use."""
+
+def load_psl_text(text: str) -> str:
+    """Replace the live list with `text`; return the new version."""
+
+def load_psl_path(path: str) -> str:
+    """Replace the live list from a file; return the new version."""

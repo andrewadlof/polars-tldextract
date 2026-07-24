@@ -109,13 +109,33 @@ The list is `include_str!`d into the binary, so there is no network access and n
 which matter inside a Databricks job. The vendored copy is `tldextract`'s own `.tld_set_snapshot`, so the two agree by
 construction.
 
-`POLARS_TLDEXTRACT_PSL` overrides it with a path to a `.dat` file, letting the list be refreshed without a rebuild. It
-is read once, on first use, and cached for the life of the process — so it must be set before the first extraction. An
-unreadable or unparseable override **panics** rather than falling back: silently parsing a different list than the
-operator asked for would produce wrong suffixes with no signal.
+`POLARS_TLDEXTRACT_PSL` overrides it with a path to a `.dat` file, resolved on first use. An unreadable or unparseable
+override **panics** rather than falling back: silently parsing a different list than the operator asked for would
+produce wrong suffixes with no signal, and a lazily-initialized static has no caller to return an error to.
 
 `scripts/refresh_psl.py` (`just refresh-psl`) re-vendors the list and checks that the ICANN/private section markers
 survived, since the crate keys on those to split the two tries.
+
+### Swapping the list at runtime
+
+The list changes several times a week, and a process that has already parsed one URL would otherwise be stuck with
+whatever it read first — untenable for a cluster that stays up for days. `load_psl()` and `refresh_psl()` replace it in
+place, so `psl::Lists` (both tries plus the version stamp) lives behind an `RwLock<Arc<Lists>>` rather than a `OnceLock`.
+
+Two properties make that safe without costing throughput:
+
+- **Readers take a snapshot, not the lock.** Each expression evaluation calls `psl::current()` once, clones the `Arc`,
+  and shares it across the whole rayon fan-out. The per-row path never touches the lock — it holds a plain `&Lists` —
+  so the swap capability is free on the hot path. This is why `with_extracted_in` takes the list as a parameter and
+  `with_extracted` is the thin wrapper that fetches it.
+- **A query is never parsed against two lists.** Because the snapshot is taken once and held, a swap that lands
+  mid-query affects only the *next* one. Without that, a 200k-row column could have its first half parsed under one
+  list and its second half under another — a divergence that would be nearly impossible to diagnose from the output.
+
+Loading parses into a complete `Lists` *before* swapping, so a rejected list leaves the process running on the one it
+already had. Rejection covers a missing section marker, a parse failure, and a list with no rules; the marker check is
+the important one, since a list without markers parses as one undifferentiated section and every private suffix would
+silently be treated as ICANN.
 
 ## Parity testing
 
