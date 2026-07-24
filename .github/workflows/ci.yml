@@ -1,15 +1,23 @@
 ---
-# Fast per-PR gate: lint, type-check, test, and prove a wheel builds and
-# imports on Linux.
+# Lint, type-check, test, and prove a wheel builds and imports on Linux.
 #
-# The full multi-platform wheel matrix lives in release.yml, which can be run
-# on demand via workflow_dispatch to rehearse a release without publishing.
+# This runs at the *promotion* boundary, not on every PR into `development`:
+# on pull requests targeting `main` and on pushes that land there. Day-to-day
+# PRs into `development` are therefore unverified by CI until release time --
+# run `just check` locally before opening one, because nothing else will.
+#
+# `workflow_dispatch` runs it against any branch on demand, which is the escape
+# hatch when you do want a green tick on a development PR.
+#
+# The full multi-platform wheel matrix lives in release.yml, which can also be
+# dispatched to rehearse a release without publishing.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:

@@ -116,21 +116,58 @@ The script verifies the ICANN and private section markers survived the download,
 build the two tries. A list refresh changes what the package returns, so it warrants a CHANGELOG entry and a version
 bump.
 
+## Branching model
+
+Two long-lived branches:
+
+| Branch | What it is |
+| --- | --- |
+| `development` | Where work lands. The default branch, and the base for every PR. |
+| `main` | Released state. Only ever receives a promotion PR from `development`, and only tags cut from it are published. |
+
+Everything else is short-lived and branches **from `development`**:
+
+```bash
+git switch development && git pull
+git switch -c feature/suffix-cache      # or fix/…, docs/…, chore/…
+```
+
+Open the PR against `development`. Both branches are covered by a repository ruleset: a pull request is required, so
+neither can be pushed to directly, and commits must be **signed** — set up
+[commit signing](https://docs.github.com/authentication/managing-commit-signature-verification) before your first PR or
+the merge will be blocked no matter how green the tests are.
+
+A release promotes `development` to `main` — see [Releasing](#releasing).
+
 ## Pull requests
 
 Opening a PR pre-fills [the pull request template](.github/pull_request_template.md) — it is the checklist below in
 long form, including the parity questions. Delete any section that doesn't apply.
 
-- Branch from `main`.
+- Branch from `development` and target `development`. PRs against `main` are for releases only.
 - Add a bullet to the `## [Unreleased]` section of `CHANGELOG.md` for anything user-visible. Skip it for internal
   refactors, test-only changes, and CI tweaks.
 - Don't bump the version in your PR — that happens once, at release.
-- Keep `just check` green.
+- **Run `just check` and keep it green.** CI does not run on PRs into `development` — it runs at the promotion
+  boundary, on PRs into `main` — so your local run is the only thing standing between a broken commit and the release
+  branch. If you want a CI tick anyway, dispatch the `CI` workflow against your branch from the Actions tab.
 - Explain *why* in the PR description. The what is visible in the diff.
 
 ## Releasing
 
-For maintainers:
+For maintainers. A release is a **promotion of `development` to `main`**, then a tag on `main`:
+
+1. On `development`, `just bump patch` (or `minor` / `major`) and move the `## [Unreleased]` bullets in `CHANGELOG.md`
+   under a new dated version heading. That is the only PR that touches the version.
+2. Rehearse the wheel matrix: run `release.yml` via `workflow_dispatch`. It builds and smoke-tests every platform and
+   **skips publishing**, so the matrix can fail without burning a version number.
+3. Open a PR from `development` to `main`, titled for the version. Merging it is the promotion.
+4. Tag `main` — `just tag` refuses to run from any other branch — which triggers the publishing workflow.
+
+Tagging is the irreversible step: PyPI releases are immutable, and a broken wheel can only be yanked, never replaced.
+Everything before step 4 is reversible, which is why the rehearsal is worth the wait.
+
+The local equivalent, for a wheel you do not intend to publish:
 
 ```bash
 just bump patch       # or minor / major

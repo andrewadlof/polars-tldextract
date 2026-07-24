@@ -23,7 +23,7 @@ This package's contract is `tldextract`'s behavior, so parsing changes are held 
 
 ## Checklist
 
-- [ ] Branched from `main`
+- [ ] Branched from `development`, and targeting `development` (releases are promoted to `main` separately)
 - [ ] `just check` is green (fmt, clippy, `cargo test`, ruff, pytest)
 - [ ] `just dev` was re-run after any Rust change, so tests exercised the new build
 - [ ] Tests added or updated — `tests/test_expr.py` for Polars-level behavior, `tests/test_parity.py` for parsing
