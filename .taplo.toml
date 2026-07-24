@@ -1,0 +1,20 @@
+# Taplo (TOML) formatter configuration.
+#
+# taplo cannot read formatter config from pyproject.toml, so it lives here.
+#
+# Array reordering is OFF globally because some arrays are order-sensitive --
+# notably tool.ruff.lint.isort.section-order, where `future` must precede
+# `first-party` so `from __future__` imports stay at the top of each module.
+# (Alphabetizing that array puts `first-party` first, which makes Ruff sort
+# project imports above `from __future__` and breaks every file.)
+#
+# Reordering is re-enabled only for the tables that hold dependency lists.
+
+[formatting]
+reorder_keys = false
+reorder_arrays = false
+
+[[rule]]
+keys = ["project", "project.optional-dependencies", "dependency-groups"]
+[rule.formatting]
+reorder_arrays = true

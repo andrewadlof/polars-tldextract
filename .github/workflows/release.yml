@@ -1,0 +1,228 @@
+---
+# Builds wheels for every supported platform, then publishes to PyPI.
+#
+# Triggered by pushing a v* tag. `workflow_dispatch` runs the same build matrix
+# but skips publishing, so the matrix can be exercised without burning a
+# version number -- PyPI releases are immutable, so a broken wheel cannot be
+# replaced, only yanked.
+#
+# Publishing uses PyPI Trusted Publishing (OIDC): there is no API token to
+# store, but the `pypi` environment must be registered as a trusted publisher
+# for this repository and workflow.
+# https://docs.pypi.org/trusted-publishers/
+#
+# The package is abi3-py310, so each platform needs exactly one wheel rather
+# than one per Python version; ci.yml's `abi3` job proves that wheel works on
+# 3.10 through 3.13.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  linux:
+    name: wheel · linux-${{ matrix.platform.target }} (${{ matrix.platform.libc }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - target: x86_64
+            libc: glibc
+            manylinux: "2014"
+          - target: aarch64
+            libc: glibc
+            manylinux: "2014"
+          - target: x86_64
+            libc: musl
+            manylinux: musllinux_1_2
+          - target: aarch64
+            libc: musl
+            manylinux: musllinux_1_2
+    steps:
+      - uses: actions/checkout@v4
+
+      # maturin-action builds inside a manylinux/musllinux container with the
+      # right cross toolchain, so no --zig and no interpreter setup is needed
+      # here: `extension-module` means the wheel never links libpython.
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist
+          manylinux: ${{ matrix.platform.manylinux }}
+          sccache: "true"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-${{ matrix.platform.target }}-${{ matrix.platform.libc }}
+          path: dist/*.whl
+
+  macos:
+    name: wheel · ${{ matrix.target }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-latest is Apple Silicon; the x86_64 wheel is cross-compiled,
+        # which the Apple toolchain handles natively. This avoids depending on
+        # an Intel runner label that GitHub may retire.
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist
+          sccache: "true"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.target }}
+          path: dist/*.whl
+
+  windows:
+    name: wheel · windows-${{ matrix.target }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # arm64 is cross-compiled with the MSVC ARM64 toolchain on an x64
+        # runner. Polars ships a win_arm64 wheel, so the dependency tree is
+        # known to build for it.
+        target: [x64, aarch64-pc-windows-msvc]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          # setup-python has no arm64 build for the x64 runner; the host
+          # interpreter is only needed to satisfy pyo3, and abi3 means the
+          # wheel does not link it.
+          architecture: x64
+
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist
+          sccache: "true"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-windows-${{ matrix.target }}
+          path: dist/*.whl
+
+  sdist:
+    name: sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  # Installs each freshly built wheel on its native platform and runs a real
+  # extraction through it. A wheel that builds but cannot load -- a missing
+  # symbol, a bad ABI tag -- is exactly the failure that a build-only matrix
+  # waves through and PyPI then makes permanent.
+  #
+  # Only the natively-runnable targets are covered: the aarch64 Linux, x86_64
+  # macOS, and arm64 Windows wheels are cross-compiled and there is no runner
+  # here to execute them on. Those stay build-verified only.
+  smoke:
+    name: smoke · ${{ matrix.os }}
+    needs: [linux, macos, windows]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: wheel-linux-x86_64-glibc
+          - os: macos-latest
+            artifact: wheel-aarch64-apple-darwin
+          - os: windows-latest
+            artifact: wheel-windows-x64
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install and exercise the wheel
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install dist/*.whl
+          python -c "
+          import polars as pl, polars_tldextract as tld
+          assert tld.extract_scalar('https://a.example.co.uk/x') == (
+              'example.co.uk', 'example', 'co.uk')
+          assert tld.extract_scalar('waiterrant.blogspot.com')[0] == 'blogspot.com'
+          got = pl.DataFrame({'u': ['a.example.co.uk', None]}).select(
+              tld.registrable_domain('u'))['u'].to_list()
+          assert got == ['example.co.uk', None], got
+          print('ok, psl', tld.psl_version())
+          "
+
+  publish:
+    name: Publish to PyPI
+    needs: [linux, macos, windows, sdist, smoke]
+    # Tags publish; workflow_dispatch is a build-only rehearsal.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # required for trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List distributions
+        run: ls -l dist
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: GitHub release
+    needs: [publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create the release with the built artifacts attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "See [CHANGELOG.md](CHANGELOG.md) for what changed."

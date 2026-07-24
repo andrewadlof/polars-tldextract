@@ -1,0 +1,762 @@
+# =============================================================================
+# polars-tldextract — project configuration.
+#
+# Native Polars expression plugin (Rust) that reimplements `tldextract`'s URL
+# -> (subdomain, domain, suffix) algorithm against the Mozilla Public Suffix
+# List, so domain parsing runs vectorized instead of row-by-row through
+# `Expr.map_elements`.
+# =============================================================================
+
+[project]
+name = "polars-tldextract"
+version = "0.1.0"
+description = "Vectorized, tldextract-compatible URL domain parsing for Polars."
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["polars", "plugin", "tldextract", "public-suffix-list", "url", "domain"]
+authors = [{ name = "Drew Adlof", email = "drew.adlof@gmail.com" }]
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE", "NOTICE"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Rust",
+  "Topic :: Internet :: Name Service (DNS)",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Typing :: Typed",
+]
+dependencies = [
+  # Plugin FFI ABI is (0, 1) from py-polars 1.37 through 1.42+, so the compiled
+  # plugin spans this whole range. See docs/architecture/overview.md.
+  "polars>=1.37.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/andrewadlof/polars-tldextract"
+Repository = "https://github.com/andrewadlof/polars-tldextract"
+Documentation = "https://github.com/andrewadlof/polars-tldextract#readme"
+Issues = "https://github.com/andrewadlof/polars-tldextract/issues"
+Changelog = "https://github.com/andrewadlof/polars-tldextract/blob/main/CHANGELOG.md"
+
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[tool.maturin]
+python-source = "python"
+module-name = "polars_tldextract._internal"
+features = ["pyo3/extension-module"]
+# The vendored Public Suffix List is `include_str!`d into the binary, so it
+# needs to reach the sdist even though it is not a Python file.
+include = ["src/data/public_suffix_list.dat"]
+
+[dependency-groups]
+dev = [
+  "maturin>=1.7.0",
+  "mdformat-gfm>=0.4.1",
+  "mdformat>=0.7.22",
+  "mypy-extensions>=1.1.0",
+  "prek>=0.2.3",
+  "pydoclint>=0.8.3",
+  "pytest-cov>=6.2.1",
+  "pytest>=8.4.2",
+  "ruff>=0.12.12",
+  "rust-just>=1.50.0",
+  # Reference implementation the parity tests assert against. Test-only: the
+  # published package has no Python-side tldextract dependency.
+  "tldextract>=5.3.1",
+  "ty>=0.0.1a20",
+  "yamlfix>=1.17.0",
+  "ziglang>=0.13.0",
+]
+
+
+[tool.uv]
+default-groups = ["dev"]
+
+# ============================================================================
+# format-docstring: Docstring formatting tool configuration
+# ============================================================================
+[tool.format_docstring]
+line_length = 79
+docstring_style = "numpy"
+fix_rst_backticks = true
+exclude = "\\.git|\\.venv|__pycache__"
+verbose = "default"
+
+[tool.mypy]
+# Specifies the glob pattern for files to include in type checks
+files = ["**/*.py"]
+# Specifies patterns to exclude from type checking
+exclude = '''(?x)(
+    # Match any directory containing standard venv markers
+    ^[^/\\]+/pyvenv\.cfg|          # Standard venv config file (Unix)
+    ^[^/\\]+\\pyvenv\.cfg|         # Standard venv config file (Windows)
+    # Match Python interpreter patterns
+    ^[^/\\]+/bin/python|           # Unix Python interpreter
+    ^[^/\\]+/bin/python[0-9.]+|    # Unix Python interpreter with version
+    ^[^/\\]+\\Scripts\\python\.exe|# Windows Python interpreter
+    # Match site-packages patterns
+    ^[^/\\]+/lib/python[0-9.]+/site-packages/|  # Unix site-packages
+    ^[^/\\]+\\Lib\\site-packages\\|             # Windows site-packages
+    # Match common venv folder naming patterns just to be safe
+    ^\.?venv[0-9._-]*[/\\]|        # venv, .venv, venv-name, etc.
+    ^\.?env[0-9._-]*[/\\]|         # env, .env, env-name, etc.
+    ^virtualenv[0-9._-]*[/\\]|     # virtualenv, virtualenv-name, etc.
+    ^python[0-9._-]*env[/\\]|      # pythonenv, python3env, etc.
+    ^py[0-9._-]*env[/\\]|          # pyenv, py3env, etc.
+    .*marimo.*                     # Any file or path containing "marimo"
+)'''
+# Ignores errors about missing imports when mypy cannot find library stubs
+ignore_missing_imports = true
+# Specifies the paths to use, after trying the paths from MYPYPATH
+mypy_path = []
+# Enables PEP 420 style namespace packages
+namespace_packages = true
+# Tells mypy that top-level packages will be based in either the current directory, or a member of the MYPYPATH
+# environment variable or mypy_path config option (only useful in the absence of __init__.py)
+explicit_package_bases = true
+# Directs what to do with imports when the imported module is found as a .py file and not part of the files, modules,
+# and packages provided
+# Options: normal, silent, error, skip
+follow_imports = "normal"
+# Determines whether to respect the follow_imports setting for stub files
+follow_imports_for_stubs = false
+# Disables using type information in installed packages (see PEP 561)
+no_site_packages = false
+# Enables reporting error messages generated within installed packages
+no_silence_site_packages = false
+# Disallows calling functions without type annotations from functions with
+# type annotations
+disallow_untyped_calls = false
+# Disallows defining functions without type annotations or with incomplete type annotations (a superset of
+# disallow_incomplete_defs)
+disallow_untyped_defs = false
+# Disallows defining functions with incomplete type annotations, while still allowing entirely unannotated definitions
+disallow_incomplete_defs = false
+# Type-checks the interior of functions without type annotations
+check_untyped_defs = false
+# Reports an error whenever a function with type annotations is decorated with a decorator without annotations
+disallow_untyped_decorators = false
+# Causes mypy to treat arguments with a None default value as having an implicit Optional type
+implicit_optional = false
+# Effectively disables checking of Optional types and None values
+# Nb. strict_optional = false is evil
+strict_optional = true
+# Warns about casting an expression to its inferred type
+warn_redundant_casts = false
+# Warns about unneeded # type: ignore comments
+warn_unused_ignores = false
+# Shows errors for missing return statements on some execution paths
+warn_no_return = true
+# Shows a warning when returning a value with type Any from a function declared with a non-Any return type
+warn_return_any = false
+# Shows a warning when encountering any code inferred to be unreachable or redundant after performing type analysis
+warn_unreachable = false
+# Ignores all non-fatal errors
+ignore_errors = false
+# Causes mypy to suppress errors caused by not being able to fully infer the types of global and class variables
+allow_untyped_globals = false
+# Allows variables to be redefined with an arbitrary type, as long as the redefinition is in the same block and nesting
+# level as the original
+allow_redefinition = false
+# Disallows inferring variable type for None from two assignments in different scopes
+local_partial_types = false
+# By default, imported values to a module are treated as exported and mypy allows other modules to import them. When
+# false, mypy will not re-export unless the item is imported using from-as or is included in __all__
+implicit_reexport = true
+# Make arguments prepended via Concatenate be truly positional-only
+strict_concatenate = false
+# Prohibit equality checks, identity checks, and container checks between non-overlapping types
+strict_equality = false
+# Enable all optional error checking flags
+strict = false
+# Prefixes each error with the relevant context
+show_error_context = false
+# Shows column numbers in error messages
+show_column_numbers = false
+# Shows documentation link to corresponding error code
+show_error_code_links = false
+# Hides error codes in error messages
+hide_error_codes = false
+# Use visually nicer output in error messages: use soft word wrap, show source code snippets, and show error location
+# markers
+pretty = false
+# Shows error messages with color enabled
+color_output = true
+# Shows a short summary line after error messages
+error_summary = true
+# Show absolute paths to files
+show_absolute_path = false
+# Always use List instead of list in error messages, even on Python 3.9+
+force_uppercase_builtins = false
+# Always use Union[] and Optional[] for union types in error messages (instead of the | operator), even on Python 3.10+
+force_union_syntax = false
+# Enables incremental mode
+incremental = true
+# Use an SQLite database to store the cache
+sqlite_cache = false
+# Include fine-grained dependency information in the cache for mypy
+cache_fine_grained = false
+# Makes mypy use incremental cache data even if it was generated by a different version of mypy
+skip_version_check = false
+# Skip cache internal consistency checks based on mtime
+skip_cache_mtime_checks = false
+# A comma-separated list of mypy plugins
+plugins = []
+# Invokes pdb on fatal error
+pdb = false
+# Shows traceback on fatal error
+show_traceback = false
+# Raise exception on fatal error
+raise_exceptions = false
+# Warns about missing type annotations in typeshed
+warn_incomplete_stub = false
+# Makes script x become module x instead of __main__
+scripts_are_modules = false
+# Warns about per-module sections in the config file that do not match any files processed when invoking mypy
+warn_unused_configs = false
+# Controls how much debug output will be generated
+verbosity = 0
+
+[tool.pydoclint]
+# The style of docstring to enforce
+# Options: "google", "numpy", "sphinx"
+style = "numpy"
+# Ignore folders or files matching these patterns
+exclude = [
+  "*marimo*",    # Ignore files related to marimo
+  "examples/*",  # Ignore example files
+  "notebooks/*", # Ignore Jupyter notebook files
+  "tests/*",     # Ignore test files
+]
+# Whether to include argument type hints in function signatures
+arg-type-hints-in-signature = true
+# Whether to enforce type hints in docstrings for function arguments
+arg-type-hints-in-docstring = true
+# Whether to check the order of arguments in docstrings against the
+# function signature
+check-arg-order = true
+# Whether to skip checking short docstrings
+skip-checking-short-docstrings = false
+# Whether to skip checking for the presence of a "Raises" section
+skip-checking-raises = false
+# Whether to allow __init__ methods to have a docstring that only documents
+# the class
+allow-init-docstring = true
+# Whether to require a "Returns" section even when a function returns
+# nothing
+require-return-section-when-returning-nothing = false
+# Whether to check that the return type in docstrings matches the
+# function's return type
+check-return-types = true
+# Whether to require a "Yields" section even when a generator yields
+# nothing
+require-yield-section-when-yielding-nothing = true
+# Whether to check that the yield type in docstrings matches the
+# generator's yield type
+check-yield-types = true
+# Whether to ignore arguments that start with an underscore
+ignore-underscore-args = true
+# Whether to check for class attribute documentation
+check-class-attributes = true
+# Whether to require documentation for private class attributes
+should-document-private-class-attributes = false
+# Whether to treat property methods as class attributes for documentation
+# purposes
+treat-property-methods-as-class-attributes = false
+# Whether to show filenames in every violation message
+show-filenames-in-every-violation-message = false
+
+[tool.pytest]
+
+[tool.pytest.ini_options]
+# Exclude tests from being collected based on Unix shell-style wildcards
+norecursedirs = [
+  ".git",
+  ".history",
+  ".ipynb_checkpoints",
+  ".pytest_cache",
+  ".venv",
+  "__pycache__",
+  "venv",
+]
+# Add directories to sys.path for module resolution
+pythonpath = []
+# Directories where pytest will look for tests
+testpaths = ["tests"]
+# # Command-line options
+# Add the specified options to the set of command line arguments
+# Benchmarks are timings, not assertions about behavior; `just bench` runs
+# them explicitly.
+addopts = ["-m", "not slow and not bench"]
+# # Custom Markers
+# Define custom markers for categorizing tests
+markers = [
+  "bench: marks throughput benchmarks (deselected by default)",
+  "integration: marks integration tests",
+  "mock: marks tests that use mocking with pytest-mock",
+  "regression: marks tests that are part of the regression test suite",
+  "slow: marks tests that are slow to run",
+  "smoke: marks basic smoke tests to ensure critical functionality",
+]
+# # Directory and path settings
+# Directory where the cache plugin stores its data
+cache_dir = ".pytest_cache"
+# Controls the console output style
+# Options: classic, progress, count
+console_output_style = "progress"
+# # Test logging and reporting
+# Default encoding to use to decode text files with docstrings
+doctest_encoding = "utf-8"
+# Action for empty parameter sets in parameterization
+# Options: skip, xfail, fail_at_collect
+empty_parameter_set_mark = "skip"
+# Filters and actions for matched warnings
+filterwarnings = []
+# Sets the logging level
+# Options: CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET
+log_level = "NOTSET"
+# Sets the format for log messages
+log_format = "%(filename)s:%(lineno)d %(levelname)s %(message)s"
+# # JUnit XML reporting
+# Configures how durations are recorded in the JUnit XML report
+# Options: total, call
+junit_duration_report = "total"
+# Configures the format of the generated JUnit XML file
+# Options: xunit1, xunit2
+junit_family = "xunit1"
+# Logging for JUnit XML reports is disabled to reduce output verbosity.
+junit_logging = "no"
+# # Test collection and selection
+# Patterns to use for matching test files
+python_files = ["*_test.py", "test_*.py"]
+# Patterns to use for matching test classes
+python_classes = ["Test*"]
+# Patterns to use for matching test functions
+python_functions = ["test_*"]
+
+# # Global Ruff settings
+[tool.ruff]
+# Patterns to exclude from linting and formatting
+extend-exclude = [
+  "*marimo*",   # Exclude files with "marimo" in the name
+  "notebooks/", # Exploratory notebooks; not packaged, not linted
+]
+# Patterns to include specifically for linting and formatting
+extend-include = [
+  "*.ipynb", # Include Jupyter notebook files
+]
+# Enables automatic fixing of linting issues (when possible)
+fix = true
+# Sets the number of spaces used for indentation
+indent-width = 4
+# Sets the maximum line length for code formatting
+line-length = 79
+# Ruff will use unstable rules, fixes, and formatting, when enabled
+preview = true
+# Displays the fixes applied by the tool
+show-fixes = true
+# The directory to consider when resolving first- vs. third-party imports
+src = ["python", "tests"]
+# Enable application of unsafe fixes
+unsafe-fixes = true
+# Sets the output format for Ruff
+# Options: "full", "concise", "grouped", "json", "junit", "github", "gitlab", "pylint", "azure"
+output-format = "full"
+
+# # Formatting Configuration
+[tool.ruff.format]
+# Whether to format code snippets in docstrings
+docstring-code-format = true
+# Determines the line length for code within docstrings
+# Options: "dynamic" or specific number (e.g., 75)
+docstring-code-line-length = "dynamic"
+# Sets the style for indentation (spaces or tabs)
+# Options: "space", "tab"
+indent-style = "space"
+# Chooses the line-ending style, 'auto' adapts based on operating system
+# Options: "lf", "crlf", "cr", "auto"
+line-ending = "auto"
+# Sets the style for quotation marks in strings
+# Options: "single", "double"
+quote-style = "double"
+# Ruff uses existing trailing commas as an indication that short lines
+# should be left separate
+skip-magic-trailing-comma = false
+
+# # Linting Configuration
+[tool.ruff.lint]
+# Select specific linting rules to apply, identified by their codes
+extend-select = [
+  # flake8-annotations -- enforce type annotations (function definitions)
+  "ANN", # Currently a bug that needs to be explored around `Any`
+  # flake8-unused-arguments -- check for unused function arguments
+  "ARG",
+  # flake8-bugbear rules
+  "B", # Apply all 'B' prefixed rules
+  # flake8-comprehensions -- simplifications of collection types
+  "C4",
+  # pydocstyle rules -- documentation-related checks
+  "D",
+  # pycodestyle checks for style guide enforcement -- PEP8 error checks
+  "E",
+  # pyflakes rules for static analysis -- checks for logical errors
+  "F",
+  # flynt -- converts old string format and concatenation to f-strings
+  "FLY",
+  # Refurb -- helps to modernize Python codebase
+  "FURB",
+  # flake8-logging-format -- enforces logging format
+  "G",
+  # isort -- sorting of import statements
+  "I",
+  # flake8-import-conventions -- custom import convention checking
+  "ICN",
+  # flake8-gettext -- checks use of internationalization functions
+  "INT",
+  # pep8-naming -- checks for naming conventions
+  "N",
+  # NumPy-specific rules
+  "NPY",
+  # pandas-vet -- Pandas-related checks for better practices
+  "PD",
+  # Perflint -- performance linting, catches inefficient usage patterns
+  "PERF",
+  # pygrep-hooks -- custom regex-based checks
+  "PGH",
+  # Python enhancement proposals implemented as linting rules
+  "PIE",
+  # pylint -- extended linting checks from pylint
+  "PL",
+  # flake8-pytest-style -- pytest style rules
+  "PT",
+  # flake8-use-pathlib -- update functions to use pathlib module
+  "PTH",
+  # flake8-quotes -- quotation mark consistency
+  "Q",
+  # flake8-raise -- finds improvements for raise statements
+  "RSE",
+  # Ruff specific enhancements and checks
+  "RUF",
+  # flake8-bandit -- security checks, e.g., no exec used
+  "exec-builtin",
+  # flake8-simplify -- helps simplify code
+  "SIM",
+  # flake8-debugger -- trailing whitespace and TODO notes
+  "T10",
+  # flake8-type-checking -- type checking enhancements
+  "TCH",
+  # flake8-tidy-imports -- enforce cleaner import statements
+  "TID",
+  # pycodestyle -- warnings related to style issues
+  "W",
+]
+# Defines which rules can be automatically fixed
+fixable = [
+  "ALL", # Allows all fixable issues to be automatically corrected
+]
+# A list of rule codes to ignore during linting
+ignore = [
+  # Dynamically typed expressions (typing.Any) are disallowed
+  "any-type",
+  # Pydocstyle D rules for docstrings
+  "undocumented-public-module", # Missing docstring in public module
+  "undocumented-public-package", # Missing docstring in public package
+  "undocumented-public-init", # Missing docstring in __init__ method
+  "unnecessary-multiline-docstring", # One-line docstring should fit on one line with quotes
+  "incorrect-blank-line-before-class", # 1 blank line required before class docstring (conflict with D211: No blank lines allowed before class
+  # docstring)
+  "missing-blank-line-after-summary", # 1 blank line required between summary line and description
+  "multi-line-summary-first-line", # Multi-line docstring summary should start at the first line
+  "multi-line-summary-second-line", # Multi-line docstring summary should start at the second line (conflict with D212)
+  "signature-in-docstring", # First line should not be the function's "signature"
+  "missing-blank-line-after-last-section", # Missing blank line after last section
+  "missing-terminal-punctuation", # First line should end with a period, question mark, or exclamation point
+  "missing-section-name-colon", # Section name should end with a semicolon
+  "undocumented-param", # Missing arguments in the docstring argument section
+  # Too many branches
+  "too-many-branches",
+  # Too many arguments to function call
+  "too-many-arguments",
+  # Too many local variables
+  "too-many-locals",
+  # Too many statements
+  "too-many-statements",
+  # Too many statements in a try clause
+  "too-many-statements-in-try-clause",
+  # Too many positional arguments
+  "too-many-positional-arguments",
+  # Magic number
+  "magic-value-comparison",
+  # Method could be a function, class method, or static method
+  "no-self-use",
+  # Bad or misspelled dunder method name
+  "bad-dunder-method-name",
+  # Logging statement uses f-string
+  "logging-f-string",
+  # Ambiguous character
+  "ambiguous-unicode-character-string",
+  # Unused import used for type checking
+  "typing-only-standard-library-import",
+]
+# Specific type-related module settings
+typing-modules = []
+
+# # Per-file specific linting ignores for certain directories/file patterns
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/*" = [
+  "ANN",     # Ignore requirement for type annotations in tests
+  "undocumented-public-function",    # Ignore missing docstring in public function
+  "import-private-name", # Custom rule example (if exists)
+]
+"notebooks/*" = [
+  "missing-type-function-argument",  # Ignore missing type annotation for notebook files
+  "missing-return-type-private-function",  # Ignore missing return type annotation for notebook files
+  "useless-expression",    # Ignore use of assert for notebook files
+  "blind-except",  # Ignore blind exception rule for notebook files
+  "module-import-not-at-top-of-file",    # Databricks notebooks have imports between COMMAND cells
+  "true-false-comparison",    # Polars requires == True/False for column comparisons (not bare expressions)
+  "undefined-name",    # Databricks provides globals like `spark` at runtime
+  "invalid-argument-name",    # Ignore argument name should be lowercase for notebook files
+  "import-outside-top-level", # Ignore f-string docstring rule for notebook files
+  "too-many-locals", # Ignore too many local variables for notebook files
+  "too-many-statements", # Ignore too many statements for notebook files
+  "used-dummy-variable",  # Marimo uses _ prefix for cell-private variables (not dummy variables)
+  "try-except-continue",    # try-except-continue used for graceful degradation in notebooks
+]
+
+# Settings specific to pytest-style checks in flake8
+[tool.ruff.lint.flake8-pytest-style]
+# Specifies whether parentheses should be used in fixture declarations
+fixture-parentheses = true
+# Specifies whether parentheses should be used in marker declarations
+mark-parentheses = true
+# Sets the type for parameter names in parametrize decorations
+# Options: "tuple", "list"
+parametrize-names-type = "tuple"
+# Sets the row type for parametrize values
+# Options: "tuple", "list"
+parametrize-values-row-type = "tuple"
+# Sets the overall type for parametrize values
+# Options: "tuple", "list"
+parametrize-values-type = "tuple"
+
+# Configuration for flake8 quotes plugin under ruff
+[tool.ruff.lint.flake8-quotes]
+# Sets the type of quotes for docstrings
+# Options: "single", "double"
+docstring-quotes = "double"
+# Sets the type of quotes for inline expressions
+# Options: "single", "double"
+inline-quotes = "double"
+# Sets the type of quotes for multiline strings
+# Options: "single", "double"
+multiline-quotes = "double"
+
+# Configuration for isort, a Python import sorter, under ruff
+[tool.ruff.lint.isort]
+# Sorts imports case-sensitively, meaning that capitalized letters come
+# before lowercase
+case-sensitive = true
+# Allows combining 'as' imports into a single line; helps to keep the
+# import section neat and tidy
+combine-as-imports = true
+# Forces each import to be on a single line; useful for keeping a clear
+# list of imports
+force-single-line = false
+# Ensures all imports within a section are sorted together; useful for
+# large projects with many imports
+force-sort-within-sections = false
+# When combining long from imports, forces wrapping of aliases into
+# multiple lines, aiding in readability
+force-wrap-aliases = true
+# Determines whether to place 'from' imports before 'import' statements
+from-first = false
+# Disables isort's default behavior to place imports in sections
+no-sections = false
+# Configures the order for relative imports, placing more distant imports
+# before closer ones
+# Options: "furthest-to-closest", "closest-to-furthest"
+relative-imports-order = "furthest-to-closest"
+# Dictates the order of imports
+section-order = [
+  "future",           # Future library imports, e.g., from __future__
+  "first-party",      # Imports from modules of the same project
+  "local-folder",     # Imports intended for local folder modules
+  "standard-library", # Standard library imports (like os, sys)
+  "third-party",      # Imports from third-party libraries (e.g., numpy)
+]
+# Allows trailing commas when splitting imports into multiple lines, which
+# is especially useful for version control systems
+split-on-trailing-comma = true
+
+# pycodestyle settings for ruff
+[tool.ruff.lint.pycodestyle]
+# Sets the maximum length for docstrings
+max-doc-length = 79
+# Sets the maximum line length for code
+max-line-length = 79
+
+# pydocstyle settings for ruff
+[tool.ruff.lint.pydocstyle]
+# Specifies the docstring convention to use
+# Options: "numpy", "google", "pep257"
+convention = "numpy"
+
+# pylint settings for Ruff
+[tool.ruff.lint.pylint]
+# List of dunder methods name to allow, in addition to the default set
+allow-dunder-method-names = []
+# List of types that are considered to be magic values.
+allow-magic-value-types = []
+# Maximum number of arguments for a function or method.
+max-args = 10
+# Maximum number of boolean expressions in a single condition.
+max-bool-expr = 5
+# Maximum number of branches in a function or method.
+max-branches = 20
+# Maximum number of local variables in a function or method.
+max-locals = 20
+# Maximum number of nested blocks in a function or method.
+max-nested-blocks = 10
+# Maximum number of positional arguments for a function or method.
+max-positional-args = 10
+# Maximum number of public methods in a class.
+max-public-methods = 30
+# Maximum number of return statements in a function or method.
+max-returns = 10
+# Maximum number of statements in a function or method.
+max-statements = 75
+
+[tool.ty]
+
+# ============================================================================
+# ENVIRONMENT CONFIGURATION
+# Controls module resolution, Python version targeting, and type stub locations
+# ============================================================================
+[tool.ty.environment]
+# Platform to target for sys.platform conditions
+# Options: "win32" | "darwin" | "linux" | "android" | "ios" | "all"
+python-platform = "all"
+# Root directories for first-party modules (priority-ordered list)
+# `src/` is the Rust crate; the Python package lives under `python/`.
+root = [".", "python"]
+
+# Override 1: Relaxed rules for test files
+[[tool.ty.overrides]]
+include = ["**/conftest.py", "**/test_*.py", "tests/**/*.py"]
+exclude = [
+  "tests/data/**",     # Skip test data files
+  "tests/fixtures/**", # Skip test fixtures
+]
+
+[tool.ty.overrides.rules]
+possibly-unresolved-reference = "warn" # Tests may use dynamic imports
+unsupported-operator = "ignore"        # Tests may use dynamic operations
+
+# Override 5: Special handling for example/demo code
+[[tool.ty.overrides]]
+include = ["python/polars_tldextract/**/*.py"]
+
+[tool.ty.overrides.rules]
+possibly-unresolved-reference = "error"
+
+[[tool.ty.overrides]]
+include = ["legacy/**/*.py"]
+exclude = ["legacy/critical/**"] # Critical legacy code gets strict rules
+
+[tool.ty.overrides.rules]
+possibly-unresolved-reference = "warn"
+
+[[tool.ty.overrides]]
+include = [
+  "**/*_pb2.py",        # Protocol buffer generated files
+  "**/*_pb2_grpc.py",   # gRPC generated files
+  "**/generated/**",
+  "**/migrations/*.py", # Database migration files
+]
+
+[tool.ty.overrides.rules]
+possibly-unresolved-reference = "ignore"
+
+[[tool.ty.overrides]]
+include = ["demos/**/*.py", "examples/**/*.py", "samples/**/*.py"]
+
+[tool.ty.overrides.rules]
+possibly-unresolved-reference = "warn" # Examples may use simplified imports
+
+# ============================================================================
+# RULES CONFIGURATION
+# Controls which type checking rules are enabled and their severity levels
+# Options: "ignore" | "warn" | "error"
+# ============================================================================
+[tool.ty.rules]
+# Core type checking rules
+possibly-unresolved-reference = "error" # Unresolved imports/attributes
+# Suppress warnings about mypy-style type: ignore comments that ty doesn't need
+# (project uses both mypy and ty, so these comments must remain for mypy)
+unused-type-ignore-comment = "ignore"
+
+# ============================================================================
+# SOURCE FILE SELECTION
+# Determines which files Ty analyzes using gitignore-style patterns
+# ============================================================================
+[tool.ty.src]
+# Files and directories to analyze (glob patterns)
+include = [
+  "examples/**/*.py", # Example code
+  "scripts/*.py",     # Python scripts in scripts directory
+  "python/**/*.py",   # All Python files in the package
+  "tests/**/*.py",    # All Python files in tests directory
+  "tools/**/*.py",    # Tools and utilities
+]
+# Files and directories to exclude (glob patterns, takes precedence over include)
+exclude = [
+  "**/migrations/**",       # Skip database migrations
+  "*.proto",                # Skip protocol buffer files
+  "*marimo*",               # Skip files with "marimo" in the name
+  "build/**",               # Skip build artifacts
+  "dist/**",                # Skip distribution files
+  "generated/**",           # Skip auto-generated code
+  "legacy/deprecated_*.py", # Skip deprecated legacy files
+  "notebooks/**",           # Skip exploratory notebooks
+]
+# Whether to respect .gitignore, .tyignore, and other ignore files
+respect-ignore-files = true
+
+# ============================================================================
+# TERMINAL OUTPUT CONFIGURATION
+# Customizes how Ty presents diagnostic information
+# ============================================================================
+[tool.ty.terminal]
+# Format for diagnostic messages
+# Options: "full" | "concise"
+output-format = "full"
+# Whether to exit with error code on warnings (useful for CI)
+error-on-warning = false
+
+# ============================================================================
+# yamlfix: YAML formatting tool configuration
+# ============================================================================
+[tool.yamlfix]
+# Wrap long lines to match the project's general line width
+line_length = 80
+# Preserve the explicit "---" document start used across config files
+explicit_start = true
+# Keep comments anchored to their content
+comments_min_spaces_from_content = 1
+# Quote strings only when required
+quote_basic_values = false
+preserve_quotes = true
+# Indent list items under their key for readability
+sequence_style = "block_style"
+indent_mapping = 2
+indent_sequence = 4
+indent_offset = 2

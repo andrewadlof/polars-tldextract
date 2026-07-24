@@ -1,0 +1,77 @@
+polars-tldextract
+Copyright 2026 Drew Adlof and polars-tldextract contributors
+
+This product is licensed under either of
+
+  * Apache License, Version 2.0 (LICENSE-APACHE)
+  * MIT License (LICENSE-MIT)
+
+at your option. Unless you explicitly state otherwise, any contribution
+intentionally submitted for inclusion in this work, as defined in the
+Apache-2.0 license, shall be dual licensed as above, without any additional
+terms or conditions.
+
+That dual license covers the code in this repository. It does NOT cover the
+two third-party works below, which carry their own terms and are included or
+drawn upon deliberately.
+
+
+================================================================================
+1. The Public Suffix List  --  Mozilla Public License 2.0
+================================================================================
+
+src/data/public_suffix_list.dat is a verbatim snapshot of the Mozilla Public
+Suffix List:
+
+    https://publicsuffix.org/list/public_suffix_list.dat
+
+It is licensed under the Mozilla Public License, Version 2.0, a copy of which
+is at https://mozilla.org/MPL/2.0/. The MPL header is retained at the top of
+the file itself.
+
+The MPL is a file-level copyleft: the obligations attach to that file, not to
+the rest of this project, and not to your code merely because you link against
+a build that embeds it. Because the list is compiled into the shared library
+(via `include_str!`), any binary distribution of polars-tldextract is a
+distribution of that file in Executable Form, so:
+
+  * The file is kept here in Source Code Form, unmodified, with its header.
+  * This notice tells recipients where to obtain it and under what terms.
+
+If you replace the vendored list at runtime with the POLARS_TLDEXTRACT_PSL
+environment variable, the same terms apply to whatever list you supply.
+
+The Public Suffix List is maintained by the Mozilla Foundation and contributors
+and is not affiliated with this project.
+
+
+================================================================================
+2. tldextract  --  BSD 3-Clause License
+================================================================================
+
+This project is an independent reimplementation, in Rust, of the URL-parsing
+algorithm in tldextract:
+
+    https://github.com/john-kurkowski/tldextract
+    Copyright (c) 2020, John Kurkowski
+    BSD 3-Clause License
+
+No tldextract source code is copied into this repository. The behavior is
+reproduced deliberately and precisely -- src/netloc.rs is a functional port of
+tldextract/remote.py, and src/extract.rs mirrors TLDExtract._extract_netloc and
+_PublicSuffixListTLDExtractor.suffix_index -- so that the two libraries return
+identical results for identical input. tests/test_parity.py asserts exactly
+that, comparing against tldextract itself.
+
+This project is not affiliated with or endorsed by the tldextract maintainers.
+Bugs found here should be reported here, not upstream.
+
+
+================================================================================
+3. Rust dependencies
+================================================================================
+
+The compiled library statically links its Rust dependencies, including
+publicsuffix, polars, pyo3, pyo3-polars, rayon, and serde. These are variously
+MIT and Apache-2.0 licensed. Run `cargo tree` for the full dependency graph, or
+`cargo about generate` / `cargo deny` to produce a complete license inventory.

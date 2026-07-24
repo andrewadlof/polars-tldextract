@@ -1,0 +1,51 @@
+# =============================================================================
+# polars-tldextract — Rust crate for the Polars expression plugin.
+#
+# The compiled cdylib is BOTH a Polars plugin (dlopen'd by polars via
+# `register_plugin_function`, C-ABI symbols emitted by `#[polars_expr]`) and a
+# regular Python extension module (`polars_tldextract._internal`, for the
+# scalar helpers). maturin packages it as the latter.
+# =============================================================================
+
+[package]
+name = "polars-tldextract"
+version = "0.1.0"
+edition = "2021"
+description = "Vectorized, tldextract-compatible URL domain parsing for Polars."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/andrewadlof/polars-tldextract"
+keywords = ["polars", "tldextract", "public-suffix-list", "domain", "url"]
+categories = ["parser-implementations"]
+# The crate is not published to crates.io: it is a cdylib whose only
+# consumer is the Python wheel. Depend on the PyPI package instead.
+publish = false
+
+[lib]
+name = "_internal"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# pyo3 0.28 is what pyo3-polars 0.27 pins. abi3-py310 gives one wheel per
+# platform covering Python 3.10+, matching polars' own floor.
+# `extension-module` is deliberately NOT enabled here -- it tells pyo3 not to
+# link libpython, which is right for the wheel but leaves `cargo test`'s test
+# binary with unresolved symbols. maturin turns it on via `[tool.maturin]
+# features` when it builds the wheel.
+pyo3 = { version = "0.28", features = ["abi3-py310"] }
+# pyo3-polars 0.27 <-> polars-rs 0.54.4 <-> py-polars 1.42.x. The plugin FFI ABI
+# is (0, 1) and unchanged since py-polars 1.37, so one build spans the whole
+# `polars>=1.37.1` range the consuming projects pin.
+pyo3-polars = { version = "0.27", features = ["derive", "dtype-struct"] }
+polars = { version = "0.54.4", default-features = false, features = ["dtype-struct"] }
+# `punycode` makes List::from_str register both the Unicode and the IDNA-ASCII
+# form of every rule, so a lowercased host matches either spelling without an
+# IDNA round-trip at lookup time.
+publicsuffix = { version = "2.3", features = ["punycode"] }
+rayon = "1"
+serde = { version = "1", features = ["derive"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"

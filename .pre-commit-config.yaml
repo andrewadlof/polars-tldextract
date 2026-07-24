@@ -1,0 +1,208 @@
+---
+repos:
+  - repo: builtin
+    hooks:
+      # See https://prek.j178.dev/builtin/#supported-hooks for fast built-in
+      # hooks
+
+      # Remove trailing white space
+      - id: trailing-whitespace
+        name: trailing-whitespace
+        exclude: .*marimo.*|^notebooks/
+        language: system
+        types_or:
+          - bash
+          - ini
+          - json
+          - jupyter
+          - markdown
+          - mdx
+          - pyi
+          - python
+          - shell
+          - toml
+          - yaml
+
+      # Check for large files
+      - id: check-added-large-files
+        name: check-added-large-files
+        language: system
+        args:
+          - --maxkb=1000
+      # Fix end of files
+      - id: end-of-file-fixer
+        name: end-of-file-fixer
+        exclude: .*marimo.*|^notebooks/
+        language: system
+        types_or:
+          - bash
+          - ini
+          - json
+          - jupyter
+          - markdown
+          - mdx
+          - pyi
+          - python
+          - shell
+          - toml
+          - yaml
+      # Check JSON syntax
+      - id: check-json
+        name: check-json
+        language: system
+        types:
+          - json
+      # Check TOML syntax
+      - id: check-toml
+        name: check-toml
+        language: system
+        types:
+          - toml
+      # Check YAML syntax
+      - id: check-yaml
+        name: check-yaml
+        language: system
+        types:
+          - yaml
+      # Check XML syntax
+      - id: check-xml
+        name: check-xml
+        language: system
+        types:
+          - xml
+      # Check merge conflicts
+      - id: check-merge-conflict
+        name: check-merge-conflict
+        language: system
+        types_or:
+          - bash
+          - ini
+          - json
+          - jupyter
+          - markdown
+          - mdx
+          - pyi
+          - python
+          - shell
+          - toml
+          - yaml
+      # Detect private keys
+      - id: detect-private-key
+        name: detect-private-key
+        language: system
+      # Format JSON files
+      - id: pretty-format-json
+        name: pretty-format-json
+        exclude: .*marimo.*|^notebooks/
+        language: system
+        args:
+          - --autofix
+          - --indent
+          - "2"
+        types:
+          - json
+  # These hooks are `language: system`, so their entry is resolved from PATH.
+  # The git hook prek installs runs .venv/bin/prek directly without putting
+  # .venv/bin on PATH, so a bare `git commit` could not find tools installed
+  # only in the project venv — it failed with a bare "No such file or directory"
+  # unless the venv happened to be activated. Routing each entry through
+  # `uv run` resolves the tool from the project environment either way.
+  # `--no-sync` keeps a commit from mutating that environment as a side effect.
+  # taplo is exempt: it runs a pinned version via uvx, not from .venv.
+  - repo: local
+    hooks:
+      # Format Markdown files
+      - id: mdformat
+        name: mdformat
+        entry: uv run --no-sync mdformat
+        language: system
+        types:
+          - markdown
+        args:
+          - --number
+          - --wrap=120
+          - --end-of-line=lf
+
+      # Format TOML files. Formatter options (including which arrays get
+      # alphabetized) live in .taplo.toml: array reordering is off globally so
+      # order-sensitive arrays like ruff's isort section-order are preserved,
+      # and re-enabled only for the dependency tables. Passing --option on the
+      # CLI would override the config file globally, so no args are given here.
+      - id: taplo-format
+        name: taplo-format
+        entry: uvx taplo@0.9.3 format
+        language: system
+        types:
+          - toml
+
+      # Format YAML files
+      - id: yamlfix
+        name: yamlfix
+        entry: uv run --no-sync yamlfix
+        language: system
+        types:
+          - yaml
+
+      # Apply all Ruff linting rules to Python code
+      - id: ruff-check
+        name: ruff-check
+        entry: uv run --no-sync ruff check
+        language: system
+        types_or:
+          - jupyter
+          - pyi
+          - python
+        exclude: .*marimo.*|^notebooks/
+        args:
+          - --config=pyproject.toml
+
+      # Apply all Ruff formatting rules to Python code
+      - id: ruff-format
+        name: ruff-format
+        entry: uv run --no-sync ruff format
+        language: system
+        types_or:
+          - jupyter
+          - pyi
+          - python
+        exclude: .*marimo.*|^notebooks/
+        args:
+          - --config=pyproject.toml
+
+      # Check types with ty
+      - id: ty-check
+        name: ty-check
+        entry: uv run --no-sync ty check
+        language: system
+        exclude: .*marimo.*|^notebooks/
+        types:
+          - python
+        pass_filenames: true
+
+      # Additional checks on Python docstrings
+      - id: pydoclint
+        name: pydoclint
+        entry: uv run --no-sync pydoclint
+        language: system
+        types:
+          - python
+        args:
+          - --config=pyproject.toml
+
+      # Format Rust code
+      - id: cargo-fmt
+        name: cargo-fmt
+        entry: cargo fmt --
+        language: system
+        types:
+          - rust
+
+      # Lint Rust code. Runs over the whole crate rather than the staged files
+      # (clippy has no per-file mode), so filenames are not passed through.
+      - id: cargo-clippy
+        name: cargo-clippy
+        entry: cargo clippy --all-targets -- -D warnings
+        language: system
+        types:
+          - rust
+        pass_filenames: false

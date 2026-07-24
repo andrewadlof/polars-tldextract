@@ -1,0 +1,5 @@
+# Default width, but let short structs and matches stay on one line rather than
+# exploding into a block per field.
+max_width = 100
+use_small_heuristics = "Max"
+match_block_trailing_comma = true
