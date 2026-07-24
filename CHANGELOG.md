@@ -17,6 +17,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-24
+
+### Changed
+
+- The README's performance figures are now a measured run on a stated machine (AMD Ryzen 9 3950X, 16 cores) rather
+  than unattributed numbers, and carry the speedup ratios and a note that the parallel figure scales with core count.
+  The previous single-threaded claim of 2.9M rows/s overstated what the reference machine reproduces (2.06M). PyPI
+  renders the description of the newest release and cannot revise an existing one, so correcting the published page
+  needed a release of its own.
+- `just bench` now builds an optimized extension. It previously depended on `just dev`, which builds unoptimized, so
+  the benchmark measured a debug build and reported a meaningless ratio against an optimized `tldextract`.
+
 ## [0.1.0] - 2026-07-24
 
 ### Added
@@ -42,4 +54,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`abi3-py310`), so a single wheel serves Python 3.10 through 3.13+.
 
 [0.1.0]: https://github.com/andrewadlof/polars-tldextract/releases/tag/v0.1.0
-[unreleased]: https://github.com/andrewadlof/polars-tldextract/compare/v0.1.0...HEAD
+[0.1.1]: https://github.com/andrewadlof/polars-tldextract/releases/tag/v0.1.1
+[unreleased]: https://github.com/andrewadlof/polars-tldextract/compare/v0.1.1...HEAD
