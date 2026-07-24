@@ -17,20 +17,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Added
-
-- `refresh_psl()` downloads the current Public Suffix List and loads it into the running process, and `load_psl()`
-  does the same for a list you already have (a path or the text itself). Both return the new `VERSION:` stamp and
-  take effect for extractions that start after they return, so a long-lived process no longer has to restart to pick
-  up a newer list. A list that fails to parse, or that is missing the ICANN/private section markers, is rejected and
-  the working list stays in use. `refresh_psl` is the only function in the package that touches the network, and only
-  when called.
-
-### Fixed
-
-- The Windows arm64 wheel now builds. pyo3's `generate-import-lib` feature synthesizes the `python3` import library at
-  build time, which the cross-build needs because the runner is x64 and has no arm64 Python to link against.
-
 ## [0.1.0] - 2026-07-24
 
 ### Added
@@ -43,6 +29,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Scalar helpers `extract_scalar` / `extract_scalar_full` for callers that are not holding a DataFrame.
 - The Public Suffix List is compiled into the binary (no network at runtime) and can be overridden without a rebuild
   via `POLARS_TLDEXTRACT_PSL`. `psl_version()` reports which list is in use.
+- `refresh_psl()` downloads the current Public Suffix List and loads it into the running process, and `load_psl()`
+  does the same for a list you already have (a path or the text itself). Both return the new `VERSION:` stamp and
+  take effect for extractions that start after they return, so a long-lived process does not have to restart to pick
+  up a newer list. A list that fails to parse, or that is missing the ICANN/private section markers, is rejected and
+  the working list stays in use. `refresh_psl` is the only function in the package that touches the network, and only
+  when called.
 - Dual licensed MIT OR Apache-2.0. The vendored Public Suffix List keeps its own MPL-2.0 terms and the `tldextract`
   algorithm its BSD-3-Clause attribution — see [NOTICE](NOTICE).
 - Wheels for Linux (`manylinux2014` and `musllinux_1_2`, x86_64 and aarch64), macOS (x86_64 and arm64), and Windows
