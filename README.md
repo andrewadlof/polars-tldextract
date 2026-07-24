@@ -128,7 +128,7 @@ Every expression takes the same `include_private` keyword.
 | `polars_tldextract`, `parallel=False` | 2.06M rows/s | 26.5× |
 | `polars_tldextract`, `parallel=True` | 19.6M rows/s | 250.7× |
 
-<sub>AMD Ryzen 9 3950X (16 cores / 32 threads), 33 GB RAM, Linux 6.18 (WSL2), Python 3.12.13, Polars 1.43.</sub>
+<sub>AMD Ryzen 9 3950X (16 cores / 32 threads), 32 GB RAM, Linux 6.18 (WSL2), Python 3.12.13, Polars 1.43.</sub>
 
 Measure a **release build**. `just bench` builds one; a plain `maturin develop` is unoptimized and roughly 15× slower
 on this workload, which measures the profile rather than the code.
