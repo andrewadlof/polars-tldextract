@@ -124,7 +124,9 @@ def test_works_inside_list_eval() -> None:
     The consuming pipeline needs this to normalize comma-separated domain
     lists without leaving Polars.
     """
-    df = pl.DataFrame({"x": ["mail.bbc.co.uk,GITHUB.COM,github.com", None, ""]})
+    df = pl.DataFrame({
+        "x": ["mail.bbc.co.uk,GITHUB.COM,github.com", None, ""]
+    })
     out = df.select(
         pl
         .col("x")
