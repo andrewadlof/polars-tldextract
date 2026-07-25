@@ -23,12 +23,12 @@ if TYPE_CHECKING:
 _PLUGIN_PATH = Path(__file__).parent
 
 __all__ = [
+    "domain",
     "extract",
-    "parts",
+    "fqdn",
     "registrable_domain",
     "subdomain",
     "suffix",
-    "top_domain",
 ]
 
 
@@ -75,7 +75,10 @@ def extract(
     """Parse URLs into a struct, faithfully reproducing `tldextract`.
 
     The output mirrors `tldextract.ExtractResult`: parts that do not exist are
-    **empty strings**, not nulls. Use `parts` instead when nulls are wanted.
+    **empty strings**, not nulls. This is the one expression here that keeps
+    that convention -- every single-field accessor uses nulls instead, which is
+    what a DataFrame wants. Reach for this when porting `tldextract` code and
+    wanting the behavior unchanged.
 
     Parameters
     ----------
@@ -101,34 +104,41 @@ def extract(
     )
 
 
-def parts(
+def fqdn(
     expr: IntoExprColumn,
     *,
     include_private: bool = False,
     parallel: bool = True,
 ) -> pl.Expr:
-    """Parse URLs into `full_domain` / `sld` / `tld`, using nulls for absences.
+    """Extract the whole hostname, e.g. `"www.bbc.co.uk"`.
 
-    The null semantics are the point: an empty string is a value that compares
-    equal to another empty string, so two URLs that both failed to parse would
-    match each other. `full_domain` is populated only when both halves exist.
+    This is the normalized netloc: scheme, userinfo, port, path, query, and
+    fragment stripped, trailing root labels dropped, and the three non-ASCII
+    IDNA separators folded to `.`. Casing and punycode spelling are preserved.
+
+    Unlike `registrable_domain`, a host with no recognized suffix still has a
+    name, so `"localhost"` and `"127.0.0.1"` come back as themselves rather
+    than null. Only input with no host at all yields null. A bracketed IPv6
+    literal keeps its brackets, matching what `extract` reports as its domain.
 
     Parameters
     ----------
     expr : IntoExprColumn
         String column of URLs (or bare hostnames).
     include_private : bool, default False
-        Whether to treat the PSL's private section as suffixes.
+        Whether to treat the PSL's private section as suffixes. Does not change
+        the result -- the same labels are rejoined either way -- but is taken
+        so every expression accepts the same keywords.
     parallel : bool, default True
         Whether the plugin may split large columns across rayon threads.
 
     Returns
     -------
     pl.Expr
-        Struct of `full_domain` (`"sld.tld"`), `sld`, and `tld`.
+        Utf8 column of hostnames, null where the input held no host.
     """
     return _plugin(
-        "tld_parts", expr, include_private=include_private, parallel=parallel
+        "tld_fqdn", expr, include_private=include_private, parallel=parallel
     )
 
 
@@ -138,10 +148,12 @@ def registrable_domain(
     include_private: bool = False,
     parallel: bool = True,
 ) -> pl.Expr:
-    """Extract `"sld.tld"`, or null when either half is missing.
+    """Extract `"domain.suffix"`, or null when either half is missing.
 
-    Equivalent to `parts(...).struct.field("full_domain")` but computed in one
-    pass without materializing the other two fields.
+    Computed in one pass, without materializing the other parts. Strict on
+    purpose: an IP or an unrecognized suffix has no registrable domain, so it
+    yields null rather than a half-formed string. Use `fqdn` when you want the
+    hostname regardless.
 
     Parameters
     ----------
@@ -185,14 +197,18 @@ def subdomain(
     Returns
     -------
     pl.Expr
-        Utf8 column, empty string where there is no subdomain.
+        Utf8 column, **null** where there is no subdomain. `extract` reports
+        the same absence as an empty string.
     """
-    return extract(
-        expr, include_private=include_private, parallel=parallel
-    ).struct.field("subdomain")
+    return _plugin(
+        "tld_subdomain",
+        expr,
+        include_private=include_private,
+        parallel=parallel,
+    )
 
 
-def top_domain(
+def domain(
     expr: IntoExprColumn,
     *,
     include_private: bool = False,
@@ -200,8 +216,9 @@ def top_domain(
 ) -> pl.Expr:
     """Extract the registrable label, e.g. `"bbc"` from `"bbc.co.uk"`.
 
-    Named `top_domain` rather than `domain` because `domain` reads as the whole
-    hostname to most callers; this is `tldextract`'s `domain` field.
+    This is `tldextract`'s `domain` field -- the label you register, not the
+    whole hostname. Use `fqdn` for the hostname and `registrable_domain` for
+    `"bbc.co.uk"`.
 
     Parameters
     ----------
@@ -215,11 +232,12 @@ def top_domain(
     Returns
     -------
     pl.Expr
-        Utf8 column, empty string where there is no registrable label.
+        Utf8 column, **null** where there is no registrable label. `extract`
+        reports the same absence as an empty string.
     """
-    return extract(
-        expr, include_private=include_private, parallel=parallel
-    ).struct.field("domain")
+    return _plugin(
+        "tld_domain", expr, include_private=include_private, parallel=parallel
+    )
 
 
 def suffix(
@@ -242,8 +260,9 @@ def suffix(
     Returns
     -------
     pl.Expr
-        Utf8 column, empty string where no suffix rule matched.
+        Utf8 column, **null** where no suffix rule matched. `extract` reports
+        the same absence as an empty string.
     """
-    return extract(
-        expr, include_private=include_private, parallel=parallel
-    ).struct.field("suffix")
+    return _plugin(
+        "tld_suffix", expr, include_private=include_private, parallel=parallel
+    )

@@ -10,7 +10,7 @@ Examples
 >>> import polars as pl
 >>> import polars_tldextract as tld
 >>> df = pl.DataFrame({"url": ["https://www.bbc.co.uk/news", None]})
->>> df.with_columns(tld.parts("url").alias("d")).unnest("d")  # doctest: +SKIP
+>>> df.with_columns(tld.extract("url").alias("d"))  # doctest: +SKIP
 >>> df.with_columns(pl.col("url").tld.registrable_domain())  # doctest: +SKIP
 
 The `.tld` expression namespace is registered on import.
@@ -18,13 +18,14 @@ The `.tld` expression namespace is registered on import.
 
 from __future__ import annotations
 
+from polars_tldextract._deprecated import parts, top_domain
 from polars_tldextract._expr import (
+    domain,
     extract,
-    parts,
+    fqdn,
     registrable_domain,
     subdomain,
     suffix,
-    top_domain,
 )
 from polars_tldextract._internal import (
     PSL_PATH_ENV,
@@ -39,9 +40,11 @@ __all__ = [
     "PSL_PATH_ENV",
     "PSL_URL",
     "TldNamespace",
+    "domain",
     "extract",
     "extract_scalar",
     "extract_scalar_full",
+    "fqdn",
     "load_psl",
     "parts",
     "psl_version",

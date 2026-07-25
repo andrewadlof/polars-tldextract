@@ -25,10 +25,14 @@ if TYPE_CHECKING:
 ROWS = 200_000
 
 # The `map_elements` path must beat this by a wide margin for the rewrite to be
-# worth the native dependency. The reference machine measures ~78k rows/s
-# through `map_elements` against ~2.06M single-threaded, a 26.5x margin, so the
+# worth the native dependency. The reference machine measures ~94k rows/s
+# through `map_elements` against ~2.05M single-threaded, a 21.7x margin, so the
 # floor leaves room for a slower or busier host before it starts crying wolf.
-MIN_SPEEDUP = 20.0
+#
+# The margin is narrower than it looks against the 0.1 figure of 26.5x: that
+# baseline also lowercased and stripped every URL, work the plugin was not
+# doing. Removing it made the comparison honest and the baseline faster.
+MIN_SPEEDUP = 15.0
 
 pytestmark = pytest.mark.bench
 
@@ -90,17 +94,15 @@ def test_throughput_vs_map_elements(
     """The plugin must be far faster than driving `tldextract` per row."""
     df = pl.DataFrame({"u": urls})
     dtype = pl.Struct([
-        pl.Field("full_domain", pl.String),
-        pl.Field("sld", pl.String),
-        pl.Field("tld", pl.String),
+        pl.Field("subdomain", pl.String),
+        pl.Field("domain", pl.String),
+        pl.Field("suffix", pl.String),
     ])
 
     def via_map_elements() -> None:
-        def extract_one(url: str) -> tuple[str | None, str | None, str | None]:
-            r = reference(url.strip().lower())
-            sld, suffix = r.domain or None, r.suffix or None
-            full = f"{sld}.{suffix}" if sld and suffix else None
-            return (full, sld, suffix)
+        def extract_one(url: str) -> tuple[str, str, str]:
+            r = reference(url)
+            return (r.subdomain, r.domain, r.suffix)
 
         df.with_columns(
             pl
@@ -113,11 +115,11 @@ def test_throughput_vs_map_elements(
     baseline = _timed("tldextract via map_elements", via_map_elements)
     serial = _timed(
         "plugin (parallel=False)",
-        lambda: df.with_columns(tld.parts("u", parallel=False).alias("d")),
+        lambda: df.with_columns(tld.extract("u", parallel=False).alias("d")),
     )
     parallel = _timed(
         "plugin (parallel=True)",
-        lambda: df.with_columns(tld.parts("u", parallel=True).alias("d")),
+        lambda: df.with_columns(tld.extract("u", parallel=True).alias("d")),
     )
     print(
         f"  speedup: {baseline / serial:.1f}x single-threaded, "
