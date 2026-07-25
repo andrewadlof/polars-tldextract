@@ -5,9 +5,9 @@
 Splitting a URL into subdomain / registrable domain / public suffix is not a string operation. `www.bbc.co.uk` and
 `blog.cloudflare.com` look identical to a regex; only the [Public Suffix List](https://publicsuffix.org/) (PSL) knows
 that the registrable domain is `bbc.co.uk` in one and `cloudflare.com` in the other. In Python that job belongs to
-[`tldextract`](https://github.com/john-kurkowski/tldextract) — but `tldextract` is a Python function, so inside Polars it
-has to be driven through `Expr.map_elements`, one interpreter round-trip per row. On a 727k-row frame that dominates the
-query.
+[`tldextract`](https://github.com/john-kurkowski/tldextract) — but `tldextract` is a Python function, so inside Polars
+it has to be driven through `Expr.map_elements`, one interpreter round-trip per row. On a 727k-row frame that dominates
+the query.
 
 This package moves the same algorithm into Rust and exposes it as ordinary Polars expressions. The design constraint is
 not "be fast" — it is **"be fast and produce byte-identical output to `tldextract`"**, so that a pipeline can swap
@@ -15,14 +15,14 @@ implementations without its results moving.
 
 ## Layout
 
-| Path | Role |
-| --- | --- |
-| `src/netloc.rs` | Port of `tldextract/remote.py`: `lenient_netloc`, `looks_like_ip`, `looks_like_ipv6` |
-| `src/psl.rs` | Loads the suffix list into two `OnceLock`s (ICANN-only and ICANN+private) |
-| `src/extract.rs` | The algorithm: `TLDExtract._extract_netloc` + `_PublicSuffixListTLDExtractor.suffix_index` |
-| `src/lib.rs` | Polars `#[polars_expr]` kernels, the rayon fan-out, and the scalar `#[pyfunction]`s |
-| `src/data/public_suffix_list.dat` | The vendored list, `include_str!`d into the binary |
-| `python/polars_tldextract/` | Thin `register_plugin_function` wrappers and the `.tld` namespace |
+| Path                              | Role                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------ |
+| `src/netloc.rs`                   | Port of `tldextract/remote.py`: `lenient_netloc`, `looks_like_ip`, `looks_like_ipv6`       |
+| `src/psl.rs`                      | Loads the suffix list into two `OnceLock`s (ICANN-only and ICANN+private)                  |
+| `src/extract.rs`                  | The algorithm: `TLDExtract._extract_netloc` + `_PublicSuffixListTLDExtractor.suffix_index` |
+| `src/lib.rs`                      | Polars `#[polars_expr]` kernels, the rayon fan-out, and the scalar `#[pyfunction]`s        |
+| `src/data/public_suffix_list.dat` | The vendored list, `include_str!`d into the binary                                         |
+| `python/polars_tldextract/`       | Thin `register_plugin_function` wrappers and the `.tld` namespace                          |
 
 The compiled cdylib is two things at once: Polars `dlopen`s it and calls the C-ABI symbols the `#[polars_expr]` macro
 emits, and Python imports it as `polars_tldextract._internal` for the scalar helpers. Both routes call
@@ -75,20 +75,39 @@ straight out of those slices, so a typical parse allocates nothing at all.
 
 Output preserves the input's casing and punycode spelling, exactly like `tldextract` — only the *lookup* is normalized.
 
-## Two null conventions, deliberately
+## One struct, one vocabulary
 
 `tldextract` uses empty strings for parts that do not exist. That is faithful, but wrong for a DataFrame: an empty
 string is a *value*, so two URLs that both failed to parse would compare equal and produce spurious joins.
 
-So there are two views over the same parse:
+The split is drawn along fidelity rather than along shape. `extract()` is the one expression that reproduces
+`tldextract.ExtractResult` verbatim — `subdomain` / `domain` / `suffix` / `is_private`, empty strings and all — because
+being byte-identical is its entire job. Every other expression yields a single Utf8 column with **nulls** for absences,
+which is what a join, a group-by, or a comparison needs.
 
-- `extract()` — `subdomain` / `domain` / `suffix` / `is_private`, empty strings for absences. Use it when you want
-  `tldextract`'s answer verbatim.
-- `parts()` — `full_domain` / `sld` / `tld`, **nulls** for absences, and `full_domain` populated only when both halves
-  exist. Use it for anything that joins, groups, or compares.
+Each single-field expression is its own kernel (`build_field` in `src/lib.rs`, plus `build_fqdn` and
+`build_registrable`) rather than a `struct.field` accessor over `extract()`. That is what lets them emit nulls at all —
+the empty string never exists to be converted — and it means asking for one part does not materialize the other three.
 
-`registrable_domain()` is `parts().struct.field("full_domain")` computed in one pass without materializing the other two
-fields.
+Through 0.1 there was a second struct, `parts()`, with the fields `full_domain` / `sld` / `tld`. It carried the null
+semantics, but at the cost of a second name for every concept — `sld` and `domain` for the same label, `tld` and
+`suffix` for the same suffix — and `full_domain` was a misnomer: it held the *registrable* domain (`bbc.co.uk`), not the
+full one (`www.bbc.co.uk`). Its three fields are now `registrable_domain()`, `domain()`, and `suffix()`, and the name it
+wanted belongs to `fqdn()`. It is deprecated in 0.2 and removed in 0.3, alongside `top_domain()` → `domain()`; both
+shims live in `python/polars_tldextract/_deprecated.py`, so the removal is a file deletion.
+
+### `fqdn()` vs. `registrable_domain()`
+
+The two disagree on hosts with no recognized suffix, and the disagreement is the point:
+
+- `registrable_domain()` is **strict** — `domain.suffix`, or null if either half is missing. An IP, a `.local` name, or
+  a bare suffix has nothing you could register, so it yields null rather than a half-formed string.
+- `fqdn()` is **lax** — a host with no suffix still has a name, so `127.0.0.1` and `localhost` come back as themselves.
+  Only input with no host at all is null.
+
+`fqdn()` rebuilds the hostname from the parse rather than reading the netloc directly, so it agrees with the other
+expressions by construction: it is exactly the non-empty `subdomain` / `domain` / `suffix` joined by dots. A bracketed
+IPv6 literal therefore keeps its brackets, matching what `extract()` reports as its domain.
 
 ## Parallelism
 
@@ -120,17 +139,18 @@ survived, since the crate keys on those to split the two tries.
 
 The list changes several times a week, and a process that has already parsed one URL would otherwise be stuck with
 whatever it read first — untenable for a cluster that stays up for days. `load_psl()` and `refresh_psl()` replace it in
-place, so `psl::Lists` (both tries plus the version stamp) lives behind an `RwLock<Arc<Lists>>` rather than a `OnceLock`.
+place, so `psl::Lists` (both tries plus the version stamp) lives behind an `RwLock<Arc<Lists>>` rather than a
+`OnceLock`.
 
 Two properties make that safe without costing throughput:
 
 - **Readers take a snapshot, not the lock.** Each expression evaluation calls `psl::current()` once, clones the `Arc`,
-  and shares it across the whole rayon fan-out. The per-row path never touches the lock — it holds a plain `&Lists` —
-  so the swap capability is free on the hot path. This is why `with_extracted_in` takes the list as a parameter and
+  and shares it across the whole rayon fan-out. The per-row path never touches the lock — it holds a plain `&Lists` — so
+  the swap capability is free on the hot path. This is why `with_extracted_in` takes the list as a parameter and
   `with_extracted` is the thin wrapper that fetches it.
 - **A query is never parsed against two lists.** Because the snapshot is taken once and held, a swap that lands
-  mid-query affects only the *next* one. Without that, a 200k-row column could have its first half parsed under one
-  list and its second half under another — a divergence that would be nearly impossible to diagnose from the output.
+  mid-query affects only the *next* one. Without that, a 200k-row column could have its first half parsed under one list
+  and its second half under another — a divergence that would be nearly impossible to diagnose from the output.
 
 Loading parses into a complete `Lists` *before* swapping, so a rejected list leaves the process running on the one it
 already had. Rejection covers a missing section marker, a parse failure, and a list with no rules; the marker check is
@@ -157,8 +177,7 @@ disagreement can only be an algorithm difference, never two different snapshots.
 ## Compatibility
 
 The plugin FFI ABI is `polars-ffi` `(MAJOR=0, MINOR=1)`, unchanged from py-polars 1.37 through 1.42, so one build spans
-the whole `polars>=1.37.1` range. If a future Polars bumps it, the plugin fails loudly at load rather than
-miscomputing.
+the whole `polars>=1.37.1` range. If a future Polars bumps it, the plugin fails loudly at load rather than miscomputing.
 
 `abi3-py312` means a single wheel covers Python 3.12+. Release wheels target `manylinux2014` (glibc 2.17), well below
 any current Databricks runtime.

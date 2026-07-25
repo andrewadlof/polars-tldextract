@@ -1,12 +1,12 @@
 """The `.tld` expression namespace.
 
-Importing `polars_tldextract` registers this, so `pl.col("url").tld.parts()`
+Importing `polars_tldextract` registers this, so `pl.col("url").tld.extract()`
 works without importing anything else.
 """
 
 from __future__ import annotations
 
-from polars_tldextract import _expr
+from polars_tldextract import _deprecated, _expr
 
 from typing import TYPE_CHECKING
 
@@ -68,10 +68,10 @@ class TldNamespace:
             _expr.extract, include_private=include_private, parallel=parallel
         )
 
-    def parts(
+    def fqdn(
         self, *, include_private: bool = False, parallel: bool = True
     ) -> pl.Expr:
-        """Parse into `full_domain` / `sld` / `tld`, using nulls for absences.
+        """Extract the whole hostname, e.g. `"www.bbc.co.uk"`.
 
         Parameters
         ----------
@@ -83,16 +83,16 @@ class TldNamespace:
         Returns
         -------
         pl.Expr
-            Struct of `full_domain` / `sld` / `tld`.
+            Utf8 column of hostnames, null where the input held no host.
         """
         return self._bind(
-            _expr.parts, include_private=include_private, parallel=parallel
+            _expr.fqdn, include_private=include_private, parallel=parallel
         )
 
     def registrable_domain(
         self, *, include_private: bool = False, parallel: bool = True
     ) -> pl.Expr:
-        """Extract `"sld.tld"`, or null when either half is missing.
+        """Extract `"domain.suffix"`, or null when either half is missing.
 
         Parameters
         ----------
@@ -127,16 +127,16 @@ class TldNamespace:
         Returns
         -------
         pl.Expr
-            Utf8 column of subdomains.
+            Utf8 column of subdomains, null where there is none.
         """
         return self._bind(
             _expr.subdomain, include_private=include_private, parallel=parallel
         )
 
-    def top_domain(
+    def domain(
         self, *, include_private: bool = False, parallel: bool = True
     ) -> pl.Expr:
-        """Extract the registrable label.
+        """Extract the registrable label, e.g. `"bbc"` from `"bbc.co.uk"`.
 
         Parameters
         ----------
@@ -148,10 +148,10 @@ class TldNamespace:
         Returns
         -------
         pl.Expr
-            Utf8 column of registrable labels.
+            Utf8 column of registrable labels, null where there is none.
         """
         return self._bind(
-            _expr.top_domain,
+            _expr.domain,
             include_private=include_private,
             parallel=parallel,
         )
@@ -171,8 +171,58 @@ class TldNamespace:
         Returns
         -------
         pl.Expr
-            Utf8 column of public suffixes.
+            Utf8 column of public suffixes, null where no rule matched.
         """
         return self._bind(
             _expr.suffix, include_private=include_private, parallel=parallel
+        )
+
+    # ------------------------------------------------------------------
+    # Deprecated, removed in 0.3.0. See `polars_tldextract._deprecated`.
+    # ------------------------------------------------------------------
+
+    def parts(
+        self, *, include_private: bool = False, parallel: bool = True
+    ) -> pl.Expr:
+        """Build the 0.1 struct. Use `registrable_domain`/`domain`/`suffix`.
+
+        Parameters
+        ----------
+        include_private : bool, default False
+            Whether to treat the PSL's private section as suffixes.
+        parallel : bool, default True
+            Whether the plugin may split large columns across rayon threads.
+
+        Returns
+        -------
+        pl.Expr
+            Struct of `full_domain` / `sld` / `tld`, as 0.1 returned it.
+        """
+        return self._bind(
+            _deprecated.parts,
+            include_private=include_private,
+            parallel=parallel,
+        )
+
+    def top_domain(
+        self, *, include_private: bool = False, parallel: bool = True
+    ) -> pl.Expr:
+        """Extract the registrable label. Deprecated alias for `domain`.
+
+        Parameters
+        ----------
+        include_private : bool, default False
+            Whether to treat the PSL's private section as suffixes.
+        parallel : bool, default True
+            Whether the plugin may split large columns across rayon threads.
+
+        Returns
+        -------
+        pl.Expr
+            Utf8 column of registrable labels, null where there is none.
+        """
+        return self._bind(
+            _deprecated.top_domain,
+            include_private=include_private,
+            parallel=parallel,
         )

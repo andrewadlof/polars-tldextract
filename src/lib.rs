@@ -22,7 +22,7 @@ use pyo3_polars::derive::polars_expr;
 use rayon::prelude::*;
 use serde::Deserialize;
 
-use crate::extract::{with_extracted, with_extracted_in};
+use crate::extract::{with_extracted, with_extracted_in, Extracted};
 use crate::psl::Lists;
 
 /// Below this many rows, fanning out costs more than it saves.
@@ -97,14 +97,14 @@ where
 
 /// `subdomain` / `domain` / `suffix` / `is_private`, exactly as `tldextract`
 /// reports them -- missing parts are empty strings, not nulls.
-struct Extracted {
+struct ExtractedColumns {
     subdomain: StringChunked,
     domain: StringChunked,
     suffix: StringChunked,
     is_private: BooleanChunked,
 }
 
-impl Concat for Extracted {
+impl Concat for ExtractedColumns {
     fn concat(&mut self, other: &Self) -> PolarsResult<()> {
         self.subdomain.append(&other.subdomain)?;
         self.domain.append(&other.domain)?;
@@ -114,7 +114,7 @@ impl Concat for Extracted {
     }
 }
 
-impl Extracted {
+impl ExtractedColumns {
     fn into_series(self, name: PlSmallStr) -> PolarsResult<Series> {
         let len = self.subdomain.len();
         let fields = [
@@ -127,7 +127,7 @@ impl Extracted {
     }
 }
 
-fn build_extracted(psl: &Lists, ca: &StringChunked, include_private: bool) -> Extracted {
+fn build_extracted(psl: &Lists, ca: &StringChunked, include_private: bool) -> ExtractedColumns {
     let mut subdomain = StringChunkedBuilder::new("subdomain".into(), ca.len());
     let mut domain = StringChunkedBuilder::new("domain".into(), ca.len());
     let mut suffix = StringChunkedBuilder::new("suffix".into(), ca.len());
@@ -150,7 +150,7 @@ fn build_extracted(psl: &Lists, ca: &StringChunked, include_private: bool) -> Ex
         }
     }
 
-    Extracted {
+    ExtractedColumns {
         subdomain: subdomain.finish(),
         domain: domain.finish(),
         suffix: suffix.finish(),
@@ -181,96 +181,127 @@ fn tld_extract(inputs: &[Series], kwargs: ExtractKwargs) -> PolarsResult<Series>
 }
 
 // =============================================================================
-// tld_parts: the null-semantics view most pipelines want
+// Single-field kernels: one part, with null semantics
 // =============================================================================
 
-/// `full_domain` / `sld` / `tld`, with absent parts as nulls rather than empty
-/// strings, and `full_domain` populated only when both halves are present.
+/// Build a Utf8 column from one field of the parse, absences as **nulls**.
 ///
-/// This is the shape downstream joins and comparisons need: an empty string is
-/// a value that can match another empty string, which would produce spurious
-/// equality between two URLs that both failed to parse.
-struct Parts {
-    full_domain: StringChunked,
-    sld: StringChunked,
-    tld: StringChunked,
-}
-
-impl Concat for Parts {
-    fn concat(&mut self, other: &Self) -> PolarsResult<()> {
-        self.full_domain.append(&other.full_domain)?;
-        self.sld.append(&other.sld)?;
-        self.tld.append(&other.tld)?;
-        Ok(())
-    }
-}
-
-impl Parts {
-    fn into_series(self, name: PlSmallStr) -> PolarsResult<Series> {
-        let len = self.full_domain.len();
-        let fields =
-            [self.full_domain.into_series(), self.sld.into_series(), self.tld.into_series()];
-        Ok(StructChunked::from_series(name, len, fields.iter())?.into_series())
-    }
-}
-
-fn build_parts(psl: &Lists, ca: &StringChunked, include_private: bool) -> Parts {
-    let mut full_domain = StringChunkedBuilder::new("full_domain".into(), ca.len());
-    let mut sld = StringChunkedBuilder::new("sld".into(), ca.len());
-    let mut tld = StringChunkedBuilder::new("tld".into(), ca.len());
-    let mut scratch = String::new();
-
+/// The null semantics are the point, and the reason these are kernels rather
+/// than `struct.field` accessors over [`tld_extract`]. `tldextract` reports an
+/// absent part as `""`, which in a DataFrame is a *value*: two URLs that both
+/// failed to parse would compare equal and join to each other. `tld_extract`
+/// keeps the empty strings because fidelity is its job; everything else here
+/// uses nulls.
+fn build_field<F>(
+    psl: &Lists,
+    ca: &StringChunked,
+    include_private: bool,
+    select: F,
+) -> StringChunked
+where
+    F: for<'a> Fn(&Extracted<'a>) -> &'a str,
+{
+    let mut b = StringChunkedBuilder::new(ca.name().clone(), ca.len());
     for opt in ca.iter() {
         match opt {
-            None => {
-                full_domain.append_null();
-                sld.append_null();
-                tld.append_null();
-            },
+            None => b.append_null(),
             Some(url) => with_extracted_in(psl, url, include_private, |e| {
-                if e.domain.is_empty() {
-                    sld.append_null();
+                let value = select(&e);
+                if value.is_empty() {
+                    b.append_null();
                 } else {
-                    sld.append_value(e.domain);
-                }
-                if e.suffix.is_empty() {
-                    tld.append_null();
-                } else {
-                    tld.append_value(e.suffix);
-                }
-                if e.domain.is_empty() || e.suffix.is_empty() {
-                    full_domain.append_null();
-                } else {
-                    scratch.clear();
-                    scratch.push_str(e.domain);
-                    scratch.push('.');
-                    scratch.push_str(e.suffix);
-                    full_domain.append_value(&scratch);
+                    b.append_value(value);
                 }
             }),
         }
     }
-
-    Parts { full_domain: full_domain.finish(), sld: sld.finish(), tld: tld.finish() }
+    b.finish()
 }
 
-fn parts_output(_: &[Field]) -> PolarsResult<Field> {
-    Ok(Field::new(
-        "tld_parts".into(),
-        DataType::Struct(vec![
-            Field::new("full_domain".into(), DataType::String),
-            Field::new("sld".into(), DataType::String),
-            Field::new("tld".into(), DataType::String),
-        ]),
-    ))
-}
-
-#[polars_expr(output_type_func=parts_output)]
-fn tld_parts(inputs: &[Series], kwargs: ExtractKwargs) -> PolarsResult<Series> {
+/// The subdomain, e.g. `www`, or null when there is none.
+#[polars_expr(output_type=String)]
+fn tld_subdomain(inputs: &[Series], kwargs: ExtractKwargs) -> PolarsResult<Series> {
     let ca = inputs[0].str()?;
     let psl = psl::current();
-    let out = build_column(ca, kwargs.parallel, |c| build_parts(&psl, c, kwargs.include_private))?;
-    out.into_series(ca.name().clone())
+    let out = build_column(ca, kwargs.parallel, |c| {
+        build_field(&psl, c, kwargs.include_private, |e| e.subdomain)
+    })?;
+    Ok(out.into_series())
+}
+
+/// The registrable label, e.g. `bbc`, or null when there is none.
+#[polars_expr(output_type=String)]
+fn tld_domain(inputs: &[Series], kwargs: ExtractKwargs) -> PolarsResult<Series> {
+    let ca = inputs[0].str()?;
+    let psl = psl::current();
+    let out = build_column(ca, kwargs.parallel, |c| {
+        build_field(&psl, c, kwargs.include_private, |e| e.domain)
+    })?;
+    Ok(out.into_series())
+}
+
+/// The public suffix, e.g. `co.uk`, or null when no rule matched.
+#[polars_expr(output_type=String)]
+fn tld_suffix(inputs: &[Series], kwargs: ExtractKwargs) -> PolarsResult<Series> {
+    let ca = inputs[0].str()?;
+    let psl = psl::current();
+    let out = build_column(ca, kwargs.parallel, |c| {
+        build_field(&psl, c, kwargs.include_private, |e| e.suffix)
+    })?;
+    Ok(out.into_series())
+}
+
+// =============================================================================
+// tld_fqdn: the whole hostname
+// =============================================================================
+
+/// Rejoin the parse into the hostname it came from, e.g. `www.bbc.co.uk`.
+///
+/// Deliberately *not* the same strictness as [`tld_registrable_domain`]: a host
+/// with no recognized suffix still has a name, so `127.0.0.1` and `localhost`
+/// come back as themselves rather than null. Only an input with no host at all
+/// (empty, whitespace) yields null. A bracketed IPv6 literal keeps its
+/// brackets, matching what `tld_extract` reports as its domain.
+///
+/// This is the normalized netloc -- scheme, userinfo, port, path, query, and
+/// fragment stripped, trailing root labels dropped, and the three non-ASCII
+/// IDNA separators folded to `.` -- rebuilt from the parts, so it agrees with
+/// the other expressions by construction.
+fn build_fqdn(psl: &Lists, ca: &StringChunked, include_private: bool) -> StringChunked {
+    let mut b = StringChunkedBuilder::new(ca.name().clone(), ca.len());
+    let mut scratch = String::new();
+    for opt in ca.iter() {
+        match opt {
+            None => b.append_null(),
+            Some(url) => with_extracted_in(psl, url, include_private, |e| {
+                scratch.clear();
+                for part in [e.subdomain, e.domain, e.suffix] {
+                    if part.is_empty() {
+                        continue;
+                    }
+                    if !scratch.is_empty() {
+                        scratch.push('.');
+                    }
+                    scratch.push_str(part);
+                }
+                if scratch.is_empty() {
+                    b.append_null();
+                } else {
+                    b.append_value(&scratch);
+                }
+            }),
+        }
+    }
+    b.finish()
+}
+
+/// `subdomain.domain.suffix`, skipping the parts that are absent.
+#[polars_expr(output_type=String)]
+fn tld_fqdn(inputs: &[Series], kwargs: ExtractKwargs) -> PolarsResult<Series> {
+    let ca = inputs[0].str()?;
+    let psl = psl::current();
+    let out = build_column(ca, kwargs.parallel, |c| build_fqdn(&psl, c, kwargs.include_private))?;
+    Ok(out.into_series())
 }
 
 // =============================================================================
@@ -315,8 +346,9 @@ fn tld_registrable_domain(inputs: &[Series], kwargs: ExtractKwargs) -> PolarsRes
 
 /// Parse one URL, for callers that are not holding a DataFrame.
 ///
-/// Returns `(full_domain, sld, tld)` with the same null semantics as
-/// [`tld_parts`], so scalar and vectorized paths agree by construction.
+/// Returns `(registrable_domain, domain, suffix)` with the same null semantics
+/// as the single-field kernels, so scalar and vectorized paths agree by
+/// construction.
 #[pyfunction]
 #[pyo3(signature = (url, *, include_private = false))]
 fn extract_scalar(
