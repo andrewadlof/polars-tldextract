@@ -33,17 +33,17 @@ just dev         # rebuild the extension in-place after Rust changes
 `uv sync` builds the Rust extension into the venv. **Any time you touch Rust, re-run `just dev`** or your tests will
 silently exercise the previous build.
 
-If a bare `cargo` command fails with `cannot set a minimum Python version 3.10 higher than the interpreter version`,
-it found an older `python3` on `PATH`. The `justfile` exports `PYO3_PYTHON=.venv/bin/python`, so `just test` and
+If a bare `cargo` command fails with `cannot set a minimum Python version 3.10 higher than the interpreter version`, it
+found an older `python3` on `PATH`. The `justfile` exports `PYO3_PYTHON=.venv/bin/python`, so `just test` and
 `just check` are unaffected; for bare `cargo`, export it yourself:
 
 ```bash
 export PYO3_PYTHON="$PWD/.venv/bin/python"
 ```
 
-This deliberately lives in the `justfile` rather than `.cargo/config.toml` — a repo-level cargo config would also
-apply inside the release workflow's cross-compilation containers, where `.venv` does not exist and every build would
-fail with "failed to run the Python interpreter".
+This deliberately lives in the `justfile` rather than `.cargo/config.toml` — a repo-level cargo config would also apply
+inside the release workflow's cross-compilation containers, where `.venv` does not exist and every build would fail with
+"failed to run the Python interpreter".
 
 ## The development loop
 
@@ -63,17 +63,17 @@ it lives in `pyproject.toml`.
 
 ## Layout
 
-| Path | What lives there |
-| --- | --- |
-| `src/netloc.rs` | Port of `tldextract/remote.py` — scheme/path/userinfo/port stripping, IP recognition |
-| `src/psl.rs` | Loading the suffix list into the ICANN-only and ICANN+private tries, and swapping it at runtime |
-| `src/extract.rs` | The algorithm itself |
-| `src/lib.rs` | Polars kernels, the rayon fan-out, the scalar Python functions |
-| `src/data/public_suffix_list.dat` | The vendored list (MPL-2.0 — see NOTICE) |
-| `python/polars_tldextract/` | Expression wrappers, the `.tld` namespace, and the list-refresh helpers |
-| `tests/test_parity.py` | The differential suite against `tldextract` |
-| `tests/test_expr.py` | Polars-level behavior: nulls, dtypes, composition, parallelism |
-| `tests/test_psl.py` | Replacing the list in a running process, and rejecting bad ones |
+| Path                              | What lives there                                                                                |
+| --------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `src/netloc.rs`                   | Port of `tldextract/remote.py` — scheme/path/userinfo/port stripping, IP recognition            |
+| `src/psl.rs`                      | Loading the suffix list into the ICANN-only and ICANN+private tries, and swapping it at runtime |
+| `src/extract.rs`                  | The algorithm itself                                                                            |
+| `src/lib.rs`                      | Polars kernels, the rayon fan-out, the scalar Python functions                                  |
+| `src/data/public_suffix_list.dat` | The vendored list (MPL-2.0 — see NOTICE)                                                        |
+| `python/polars_tldextract/`       | Expression wrappers, the `.tld` namespace, and the list-refresh helpers                         |
+| `tests/test_parity.py`            | The differential suite against `tldextract`                                                     |
+| `tests/test_expr.py`              | Polars-level behavior: nulls, dtypes, composition, parallelism                                  |
+| `tests/test_psl.py`               | Replacing the list in a running process, and rejecting bad ones                                 |
 
 [`docs/architecture/overview.md`](docs/architecture/overview.md) explains *why* the `publicsuffix` crate's API lines up
 with `tldextract`'s trie walk. Read it before touching `src/extract.rs` — the three facts it lists are each
@@ -81,21 +81,21 @@ load-bearing, and none of them are obvious from the code alone.
 
 ## The parity rule
 
-**Any change to parsing behavior must keep `tests/test_parity.py` green**, and that suite is not a formality: it
-derives ~29,000 hostnames mechanically from every rule in the Public Suffix List and compares against `tldextract`
-itself, with both sides reading the same list file.
+**Any change to parsing behavior must keep `tests/test_parity.py` green**, and that suite is not a formality: it derives
+~29,000 hostnames mechanically from every rule in the Public Suffix List and compares against `tldextract` itself, with
+both sides reading the same list file.
 
 This means some things you might expect to be welcome are not:
 
-- "Fixing" a case where `tldextract` looks wrong. If `tldextract` returns something surprising, this package returns
-  the same surprising thing on purpose. Report it upstream; if upstream changes, we follow.
+- "Fixing" a case where `tldextract` looks wrong. If `tldextract` returns something surprising, this package returns the
+  same surprising thing on purpose. Report it upstream; if upstream changes, we follow.
 - Adding IDNA normalization, lowercasing of output, or stripping of trailing dots from results. Output preserves the
   input's spelling and case exactly as `tldextract` does; only the *lookup* is normalized.
-- Turning empty-string results into nulls in `extract()`. That distinction is deliberate — `extract()` is faithful,
-  `parts()` is the null-using view.
+- Turning empty-string results into nulls in `extract()`. That distinction is deliberate — `extract()` is the one
+  expression that reproduces `tldextract.ExtractResult` verbatim; every other expression already uses nulls.
 
-New behavior that `tldextract` has no opinion on (new convenience expressions, new output shapes) is fine and does
-not need a parity case — but it does need tests in `tests/test_expr.py`.
+New behavior that `tldextract` has no opinion on (new convenience expressions, new output shapes) is fine and does not
+need a parity case — but it does need tests in `tests/test_expr.py`.
 
 ## Refreshing the Public Suffix List
 
@@ -107,23 +107,22 @@ just refresh-psl   # downloads the current list into src/data/
 just check         # the parity corpus re-derives itself from the new list
 ```
 
-Users refreshing the list in *their* running process is a separate mechanism — `tld.refresh_psl()` and
-`tld.load_psl()`, implemented in `src/psl.rs` and `python/polars_tldextract/_psl.py`. That path does not touch the
-vendored file and needs no rebuild. If you change how lists are parsed or validated, both go through
-`psl::Lists::from_text`, so the marker and empty-list checks cover them together.
+Users refreshing the list in *their* running process is a separate mechanism — `tld.refresh_psl()` and `tld.load_psl()`,
+implemented in `src/psl.rs` and `python/polars_tldextract/_psl.py`. That path does not touch the vendored file and needs
+no rebuild. If you change how lists are parsed or validated, both go through `psl::Lists::from_text`, so the marker and
+empty-list checks cover them together.
 
-The script verifies the ICANN and private section markers survived the download, since the parser keys on those to
-build the two tries. A list refresh changes what the package returns, so it warrants a CHANGELOG entry and a version
-bump.
+The script verifies the ICANN and private section markers survived the download, since the parser keys on those to build
+the two tries. A list refresh changes what the package returns, so it warrants a CHANGELOG entry and a version bump.
 
 ## Branching model
 
 Two long-lived branches:
 
-| Branch | What it is |
-| --- | --- |
-| `development` | Where work lands. The default branch, and the base for every PR. |
-| `main` | Released state. Only ever receives a promotion PR from `development`, and only tags cut from it are published. |
+| Branch        | What it is                                                                                                     |
+| ------------- | -------------------------------------------------------------------------------------------------------------- |
+| `development` | Where work lands. The default branch, and the base for every PR.                                               |
+| `main`        | Released state. Only ever receives a promotion PR from `development`, and only tags cut from it are published. |
 
 Everything else is short-lived and branches **from `development`**:
 
@@ -141,16 +140,16 @@ A release promotes `development` to `main` — see [Releasing](#releasing).
 
 ## Pull requests
 
-Opening a PR pre-fills [the pull request template](.github/pull_request_template.md) — it is the checklist below in
-long form, including the parity questions. Delete any section that doesn't apply.
+Opening a PR pre-fills [the pull request template](.github/pull_request_template.md) — it is the checklist below in long
+form, including the parity questions. Delete any section that doesn't apply.
 
 - Branch from `development` and target `development`. PRs against `main` are for releases only.
 - Add a bullet to the `## [Unreleased]` section of `CHANGELOG.md` for anything user-visible. Skip it for internal
   refactors, test-only changes, and CI tweaks.
 - Don't bump the version in your PR — that happens once, at release.
-- **Run `just check` and keep it green.** CI does not run on PRs into `development` — it runs at the promotion
-  boundary, on PRs into `main` — so your local run is the only thing standing between a broken commit and the release
-  branch. If you want a CI tick anyway, dispatch the `CI` workflow against your branch from the Actions tab.
+- **Run `just check` and keep it green.** CI does not run on PRs into `development` — it runs at the promotion boundary,
+  on PRs into `main` — so your local run is the only thing standing between a broken commit and the release branch. If
+  you want a CI tick anyway, dispatch the `CI` workflow against your branch from the Actions tab.
 - Explain *why* in the PR description. The what is visible in the diff.
 
 ## Releasing
@@ -176,27 +175,35 @@ just publish          # upload to PyPI
 ```
 
 That builds a wheel for the host platform only. **The real release is cut by CI**: push a `v*` tag and
-`.github/workflows/release.yml` builds the full matrix — Linux glibc and musl on x86_64 and aarch64, macOS on Intel
-and Apple Silicon, Windows on x64 and arm64, plus an sdist — then uploads it to PyPI.
+`.github/workflows/release.yml` builds the full matrix — Linux glibc and musl on x86_64 and aarch64, macOS on Intel and
+Apple Silicon, Windows on x64 and arm64, plus an sdist — then uploads it to PyPI.
 
 Run that workflow manually (`workflow_dispatch`) first. It builds and smoke-tests everything but skips publishing, so
-the matrix can be rehearsed without burning a version number — PyPI releases are immutable, and a broken wheel can
-only be yanked, never replaced.
+the matrix can be rehearsed without burning a version number — PyPI releases are immutable, and a broken wheel can only
+be yanked, never replaced.
 
 ### Publishing credentials
 
-CI authenticates with a PyPI API token held as the `PYPI_API_TOKEN` secret on the repository's **`pypi` environment**,
-so only the `publish` job can read it and any reviewers configured on that environment gate the upload:
+CI publishes with **Trusted Publishing** (OIDC), so there is no stored token to leak, rotate, or forget to revoke. PyPI
+holds a publisher registered against four things, and the upload fails unless all four match:
 
-```bash
-gh secret set PYPI_API_TOKEN --env pypi     # paste the token at the prompt
-```
+|                   |                     |
+| ----------------- | ------------------- |
+| Owner             | `andrewadlof`       |
+| Repository        | `polars-tldextract` |
+| Workflow filename | `release.yml`       |
+| Environment       | `pypi`              |
 
-Set it with the prompt rather than as an argument — a token on a command line lands in your shell history.
+Register or edit it at <https://pypi.org/manage/project/polars-tldextract/settings/publishing/>. Renaming the repo,
+renaming `release.yml`, or renaming the environment breaks the match until the publisher is updated to agree — the
+failure surfaces at upload time as `Trusted publishing exchange failure`, after the whole wheel matrix has built.
 
-A project's *first* upload needs an **account-scoped** token, because PyPI only issues project-scoped tokens for
-projects that already exist. Straight after that first release, create a project-scoped token, replace the secret, and
-revoke the account-scoped one.
+The `publish` job needs `permissions: id-token: write` to mint the OIDC token, and must **not** pass a `password:` to
+`pypa/gh-action-pypi-publish`. An explicit password silently disables both Trusted Publishing and the PEP 740
+attestations the action otherwise produces by default — which is what happened through 0.2.0.
+
+Any reviewers or wait timer configured on the `pypi` environment still gate the upload; the environment is part of what
+PyPI authenticates, not just a place to keep things.
 
 For a manual `just publish`, `uv publish` reads `UV_PUBLISH_TOKEN` from the environment:
 
@@ -217,5 +224,5 @@ period rather than another comment. Maintainers may edit, lock, or remove contri
 
 ## Questions
 
-Open a [discussion or issue](https://github.com/andrewadlof/polars-tldextract/issues). Bug reports that include
-the exact input string are answered fastest.
+Open a [discussion or issue](https://github.com/andrewadlof/polars-tldextract/issues). Bug reports that include the
+exact input string are answered fastest.

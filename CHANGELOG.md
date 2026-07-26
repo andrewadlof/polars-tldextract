@@ -17,6 +17,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Releases publish to PyPI with Trusted Publishing (OIDC) instead of a stored API token. The `publish` job now carries
+  `permissions: id-token: write` and passes no `password:` — an explicit password silently disabled both Trusted
+  Publishing and the PEP 740 attestations `pypa/gh-action-pypi-publish` produces by default, which is why the 0.2.0
+  release logged `the attestations input is ignored`. Requires a publisher registered on PyPI for this
+  repo/workflow/environment; see CONTRIBUTING.md.
+- CI and release workflows moved off actions pinned to the deprecated Node 20 runtime: `actions/checkout` v4 → v7,
+  `actions/download-artifact` v4 → v8, `actions/upload-artifact` v4 → v7, `actions/setup-python` v5 → v7, and
+  `astral-sh/setup-uv` v5 → v9. Every input in use (`merge-multiple`, `architecture`, `name`, `path`) exists in the new
+  majors.
+
 ## [0.2.0] - 2026-07-25
 
 ### Added

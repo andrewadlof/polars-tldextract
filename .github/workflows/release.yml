@@ -6,33 +6,33 @@
 # version number -- PyPI releases are immutable, so a broken wheel cannot be
 # replaced, only yanked.
 #
-# Publishing authenticates with a PyPI API token, stored as the `PYPI_API_TOKEN`
-# secret on this repository's `pypi` environment (not as a repository-wide
-# secret, so only this job can read it):
+# Publishing uses Trusted Publishing (OIDC), so there is no stored token to
+# leak, rotate, or forget to revoke. PyPI is configured with a publisher
+# matching this repository, this workflow filename, and the `pypi` environment;
+# the runner mints a short-lived OIDC token that PyPI trades for an upload
+# token scoped to this project alone.
 #
-#   gh secret set PYPI_API_TOKEN --env pypi     # paste the token when prompted
+# Changing the repository name, renaming this file, or renaming the environment
+# invalidates that match and the upload fails until the publisher on PyPI is
+# updated to agree. Register or edit it at:
 #
-# The first upload of a project needs an account-scoped token, since PyPI only
-# issues project-scoped tokens for projects that already exist. Replace it with
-# a project-scoped one after the first release, and revoke the old one.
+#   https://pypi.org/manage/project/polars-tldextract/settings/publishing/
 #
-# Trusted Publishing (OIDC) is the alternative and needs no stored secret at
-# all: register this repo/workflow/environment at
-# https://docs.pypi.org/trusted-publishers/, then drop the `password:` line
-# below and give this job `permissions: id-token: write`.
+# The switch from an API token also re-enables PEP 740 attestations: the
+# publish action defaults `attestations: true`, but an explicit `password:`
+# silently disables both Trusted Publishing and attestations, which is what
+# happened through 0.2.0.
 #
 # The package is abi3-py310, so each platform needs exactly one wheel rather
 # than one per Python version; ci.yml's `abi3` job proves that wheel works on
 # 3.10 through 3.13.
 name: Release
-
 on:
   push:
-    tags: ["v*"]
+    tags:
+      - "v*"
   workflow_dispatch:
-
 permissions: {}
-
 jobs:
   linux:
     name: wheel · linux-${{ matrix.platform.target }} (${{ matrix.platform.libc }})
@@ -54,7 +54,7 @@ jobs:
             libc: musl
             manylinux: musllinux_1_2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # maturin-action builds inside a manylinux/musllinux container with the
       # right cross toolchain, so no --zig and no interpreter setup is needed
@@ -65,12 +65,11 @@ jobs:
           args: --release --out dist
           manylinux: ${{ matrix.platform.manylinux }}
           sccache: "true"
-
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: wheel-linux-${{ matrix.platform.target }}-${{ matrix.platform.libc }}
+          name: wheel-linux-${{ matrix.platform.target }}-${{ matrix.platform.libc
+            }}
           path: dist/*.whl
-
   macos:
     name: wheel · ${{ matrix.target }}
     runs-on: macos-latest
@@ -80,25 +79,23 @@ jobs:
         # macos-latest is Apple Silicon; the x86_64 wheel is cross-compiled,
         # which the Apple toolchain handles natively. This avoids depending on
         # an Intel runner label that GitHub may retire.
-        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+        target:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-
       - uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
           args: --release --out dist
           sccache: "true"
-
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-${{ matrix.target }}
           path: dist/*.whl
-
   windows:
     name: wheel · windows-${{ matrix.target }}
     runs-on: windows-latest
@@ -108,41 +105,37 @@ jobs:
         # arm64 is cross-compiled with the MSVC ARM64 toolchain on an x64
         # runner. Polars ships a win_arm64 wheel, so the dependency tree is
         # known to build for it.
-        target: [x64, aarch64-pc-windows-msvc]
+        target:
+          - x64
+          - aarch64-pc-windows-msvc
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           # setup-python has no arm64 build for the x64 runner; the host
           # interpreter is only needed to satisfy pyo3, and abi3 means the
           # wheel does not link it.
           architecture: x64
-
       - uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
           args: --release --out dist
           sccache: "true"
-
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-windows-${{ matrix.target }}
           path: dist/*.whl
-
   sdist:
     name: sdist
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v7
       - uses: PyO3/maturin-action@v1
         with:
           command: sdist
           args: --out dist
-
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sdist
           path: dist/*.tar.gz
@@ -157,7 +150,10 @@ jobs:
   # here to execute them on. Those stay build-verified only.
   smoke:
     name: smoke · ${{ matrix.os }}
-    needs: [linux, macos, windows]
+    needs:
+      - linux
+      - macos
+      - windows
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -170,15 +166,13 @@ jobs:
           - os: windows-latest
             artifact: wheel-windows-x64
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.artifact }}
           path: dist
-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-
       - name: Install and exercise the wheel
         shell: bash
         run: |
@@ -194,19 +188,29 @@ jobs:
           assert got == ['bbc.co.uk', None], got
           print('ok, psl', tld.psl_version())
           "
-
   publish:
     name: Publish to PyPI
-    needs: [linux, macos, windows, sdist, smoke]
+    needs:
+      - linux
+      - macos
+      - windows
+      - sdist
+      - smoke
     # Tags publish; workflow_dispatch is a build-only rehearsal.
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    # The token lives on this environment, not on the repository, so only jobs
-    # that declare `environment: pypi` can read it -- and any reviewers or wait
-    # timer configured there gate the upload.
+    # PyPI checks the OIDC token against the publisher registered for this
+    # exact repo/workflow/environment triple, so the environment is part of
+    # what is being authenticated rather than just a label. Any reviewers or
+    # wait timer configured on it still gate the upload.
     environment: pypi
+    permissions:
+      # Lets the runner mint the short-lived OIDC token that Trusted
+      # Publishing trades for an upload token. Without it the upload fails
+      # with "Trusted publishing exchange failure".
+      id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -217,28 +221,27 @@ jobs:
       - name: List distributions
         run: ls -l dist
 
+      # No `password:`. Omitting it is what selects Trusted Publishing, and it
+      # is also what makes the action's default `attestations: true` take
+      # effect -- an explicit password disables both, silently.
       - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-
   github-release:
     name: GitHub release
-    needs: [publish]
+    needs:
+      - publish
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
-
       - name: Create the release with the built artifacts attached
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
+        run: |-
           gh release create "${GITHUB_REF_NAME}" dist/* \
             --title "${GITHUB_REF_NAME}" \
             --notes "See [CHANGELOG.md](CHANGELOG.md) for what changed."
