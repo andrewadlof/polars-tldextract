@@ -9,7 +9,7 @@
 
 [package]
 name = "polars-tldextract"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Vectorized, tldextract-compatible URL domain parsing for Polars."
 license = "MIT OR Apache-2.0"
@@ -39,7 +39,9 @@ pyo3 = { version = "0.28", features = ["abi3-py310", "generate-import-lib"] }
 # is (0, 1) and unchanged since py-polars 1.37, so one build spans the whole
 # `polars>=1.37.1` range the consuming projects pin.
 pyo3-polars = { version = "0.27", features = ["derive", "dtype-struct"] }
-polars = { version = "0.54.4", default-features = false, features = ["dtype-struct"] }
+polars = { version = "0.54.4", default-features = false, features = [
+  "dtype-struct",
+] }
 # `punycode` makes List::from_str register both the Unicode and the IDNA-ASCII
 # form of every rule, so a lowercased host matches either spelling without an
 # IDNA round-trip at lookup time.
