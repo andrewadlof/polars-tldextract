@@ -12,47 +12,40 @@
 # The full multi-platform wheel matrix lives in release.yml, which can also be
 # dispatched to rehearse a release without publishing.
 name: CI
-
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 env:
   CARGO_TERM_COLOR: always
-
 jobs:
   rust:
     name: Rust (fmt, clippy, test)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # `cargo test` links libpython (the wheel build sets
       # `extension-module`, which does not), and the crate is abi3-py310, so
       # pyo3 needs an interpreter at least that new on PATH. Without this it
       # picks up the runner's default python and refuses.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-
       - uses: Swatinem/rust-cache@v2
-
       - name: Format
         run: cargo fmt --check
-
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
-
       - name: Unit tests
         run: cargo test --lib
 
@@ -63,29 +56,27 @@ jobs:
     name: Python (lint, types, tests)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v7
+      # Pinned to an exact tag, not a floating major: setup-uv publishes
+      # moving `vN` tags only through v7, so `@v9` does not resolve and the
+      # job dies at "Set up job" before running a step.
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
           python-version: "3.12"
-
       - uses: Swatinem/rust-cache@v2
 
       # Builds the Rust extension into the venv as a side effect. uv passes the
       # interpreter to maturin, so pyo3 resolves it without further help.
       - name: Sync
         run: uv sync
-
       - name: Lint
         run: |
           uv run ruff check
           uv run ruff format --check
-
       - name: Type check
         run: uv run ty check
-
       - name: Docstrings
         run: uv run pydoclint --config=pyproject.toml python scripts
 
@@ -94,23 +85,19 @@ jobs:
       # tldextract itself.
       - name: Tests
         run: uv run pytest
-
   wheel:
     name: Build and smoke-test a wheel
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v7
       - uses: PyO3/maturin-action@v1
         with:
           args: --release --out dist
           manylinux: "2014"
           sccache: "true"
-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-
       - name: Install the wheel into a clean environment and exercise it
         run: |
           python -m pip install --upgrade pip
@@ -123,8 +110,7 @@ jobs:
               tld.registrable_domain('u'))['u'][0] == 'bbc.co.uk'
           print('ok, psl', tld.psl_version())
           "
-
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel
           path: dist/*.whl
@@ -135,29 +121,30 @@ jobs:
   # runs the full suite, rather than rebuilding per version.
   abi3:
     name: abi3 · Python ${{ matrix.python-version }}
-    needs: [wheel]
+    needs:
+      - wheel
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: wheel
           path: dist
-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-
       - name: Install the wheel and the test dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install dist/*.whl pytest tldextract
-
       - name: Confirm the wheel is the abi3 one, not a rebuild
         run: |
           ls dist/

@@ -179,3 +179,6 @@ reports/*_files/
 
 # Notebook data
 notebooks/*.parquet
+
+# MkDocs build output (the site is published from CI, never committed)
+site/
