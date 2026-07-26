@@ -57,8 +57,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # Pinned to an exact tag, not a floating major: setup-uv publishes
+      # moving `vN` tags only through v7, so `@v9` does not resolve and the
+      # job dies at "Set up job" before running a step.
       - name: Install uv
-        uses: astral-sh/setup-uv@v9
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
           python-version: "3.12"
