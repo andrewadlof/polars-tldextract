@@ -6,7 +6,9 @@ Thanks for taking the time. This is a small project with one unusual property wo
 section explains where that bites.
 
 By contributing you agree that your work is dual licensed under MIT and Apache-2.0, matching the project — see
-[LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE), and [NOTICE](NOTICE).
+[LICENSE-MIT](https://github.com/andrewadlof/polars-tldextract/blob/main/LICENSE-MIT),
+[LICENSE-APACHE](https://github.com/andrewadlof/polars-tldextract/blob/main/LICENSE-APACHE), and
+[NOTICE](https://github.com/andrewadlof/polars-tldextract/blob/main/NOTICE).
 
 ## What's most useful
 
@@ -52,6 +54,8 @@ just test       # cargo test --lib + pytest
 just check      # the full gate: fmt, clippy, cargo test, ruff, pytest
 just bench      # throughput vs. tldextract through map_elements
 just precommit  # every pre-commit hook (ruff, ty, pydoclint, cargo, mdformat, taplo)
+just docs-serve # the documentation site, with live reload
+just docs       # build the site, failing on broken links
 ```
 
 `just check` is what CI runs. Run it before opening a PR.
@@ -75,9 +79,9 @@ it lives in `pyproject.toml`.
 | `tests/test_expr.py`              | Polars-level behavior: nulls, dtypes, composition, parallelism                                  |
 | `tests/test_psl.py`               | Replacing the list in a running process, and rejecting bad ones                                 |
 
-[`docs/architecture/overview.md`](docs/architecture/overview.md) explains *why* the `publicsuffix` crate's API lines up
-with `tldextract`'s trie walk. Read it before touching `src/extract.rs` — the three facts it lists are each
-load-bearing, and none of them are obvious from the code alone.
+[`docs/architecture/overview.md`](https://andrewadlof.github.io/polars-tldextract/architecture/overview/) explains *why*
+the `publicsuffix` crate's API lines up with `tldextract`'s trie walk. Read it before touching `src/extract.rs` — the
+three facts it lists are each load-bearing, and none of them are obvious from the code alone.
 
 ## The parity rule
 
@@ -115,6 +119,41 @@ empty-list checks cover them together.
 The script verifies the ICANN and private section markers survived the download, since the parser keys on those to build
 the two tries. A list refresh changes what the package returns, so it warrants a CHANGELOG entry and a version bump.
 
+## Documentation
+
+The site is MkDocs + Material, published to <https://andrewadlof.github.io/polars-tldextract/> from `main` by
+`.github/workflows/docs.yml`. Pull requests targeting `main` build it without deploying.
+
+```bash
+just docs-serve   # live reload at http://127.0.0.1:8000
+just docs         # build into site/, --strict
+```
+
+Two rules keep it from drifting out of date, and both are worth respecting:
+
+- **Prose is not duplicated.** The narrative pages pull their content out of `README.md` between
+  `<!--usage-start-->`-style markers, so the README a PyPI visitor reads and the page a site visitor reads are the same
+  bytes. Edit the README; the site follows. If you move a marker, `just docs` fails.
+- **The API reference is generated** from the NumPy docstrings pydoclint already enforces, so it cannot describe a
+  signature the code does not have. A new public expression needs no reference page — just an entry in
+  `docs/reference.md`.
+
+`mkdocstrings` imports the package to read its docstrings, so the compiled extension must be present. `uv sync` builds
+it; after a Rust change run `just dev` first or the reference documents the previous build.
+
+`docs/*.md` is **excluded from mdformat** (see `.pre-commit-config.yaml`). mdformat does not understand mkdocstrings'
+`options:` blocks or autorefs `[text][target]` links and silently breaks both. `docs/architecture/` is plain Markdown
+and stays covered.
+
+Cross-reference API objects with autorefs rather than a hand-written anchor, so the link survives a page being renamed:
+
+```markdown
+[`fqdn()`][polars_tldextract.fqdn]
+```
+
+Diagrams use Material's built-in mermaid support — a plain \`\`\`mermaid fence. The `mkdocs-mermaid2` plugin is
+deliberately not installed; it conflicts with Material's own handling.
+
 ## Branching model
 
 Two long-lived branches:
@@ -140,8 +179,9 @@ A release promotes `development` to `main` — see [Releasing](#releasing).
 
 ## Pull requests
 
-Opening a PR pre-fills [the pull request template](.github/pull_request_template.md) — it is the checklist below in long
-form, including the parity questions. Delete any section that doesn't apply.
+Opening a PR pre-fills
+[the pull request template](https://github.com/andrewadlof/polars-tldextract/blob/main/.github/pull_request_template.md)
+— it is the checklist below in long form, including the parity questions. Delete any section that doesn't apply.
 
 - Branch from `development` and target `development`. PRs against `main` are for releases only.
 - Add a bullet to the `## [Unreleased]` section of `CHANGELOG.md` for anything user-visible. Skip it for internal

@@ -57,6 +57,27 @@ bench: dev-release
 refresh-psl:
     uv run python scripts/refresh_psl.py
 
+# ----------------------------------------------------------------------------
+# docs: the MkDocs site
+#
+# The `docs` dependency group is not in `default-groups`, so these recipes ask
+# for it explicitly rather than making every `uv sync` pay for the toolchain.
+#
+# mkdocstrings imports the package to read its docstrings, so the compiled
+# extension has to be present -- `uv sync` builds it, but after a Rust change
+# run `just dev` first or the reference documents the previous build.
+# ----------------------------------------------------------------------------
+
+# Serve the docs with live reload at http://127.0.0.1:8000
+[group('docs')]
+docs-serve *args:
+    DISABLE_MKDOCS_2_WARNING=true uv run --group docs mkdocs serve {{args}}
+
+# Build the site into site/, failing on broken links or unresolved references
+[group('docs')]
+docs:
+    DISABLE_MKDOCS_2_WARNING=true uv run --group docs mkdocs build --strict
+
 # Lint with ruff and auto-fix what it safely can
 [group('dev')]
 lint *args:

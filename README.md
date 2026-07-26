@@ -3,6 +3,8 @@
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
+<!--intro-start-->
+
 Accurate URL domain parsing for [Polars](https://pola.rs), as a native Rust expression plugin.
 
 Splitting a hostname into subdomain / domain / public suffix is not a string operation. `www.bbc.co.uk` and
@@ -13,7 +15,8 @@ in the other — "last two labels" is wrong half the time. Getting it right requ
 Polars it can only be driven through `Expr.map_elements`, one interpreter round-trip per row.
 
 This package implements the same algorithm in Rust and exposes it as ordinary Polars expressions. It is built to produce
-**identical output to `tldextract`**, not merely similar output — see [Correctness](#correctness).
+**identical output to `tldextract`**, not merely similar output — see
+[Correctness](https://andrewadlof.github.io/polars-tldextract/correctness/).
 
 ```python
 import polars as pl
@@ -48,6 +51,10 @@ df.with_columns(
 └─────────────────────────────────────────┴─────────────────────┴────────────────────┴────────┘
 ```
 
+<!--intro-end-->
+
+<!--install-start-->
+
 ## Install
 
 ```bash
@@ -59,7 +66,11 @@ uv add polars-tldextract
 Prebuilt wheels cover Linux (glibc and musl, x86_64 and aarch64), macOS (Intel and Apple Silicon), and Windows (x64 and
 arm64). There is one wheel per platform rather than one per Python version, because the extension is built against the
 stable ABI. An sdist is published too, so anything else builds from source given a Rust toolchain — see
-[CONTRIBUTING.md](CONTRIBUTING.md).
+[CONTRIBUTING.md](https://github.com/andrewadlof/polars-tldextract/blob/main/CONTRIBUTING.md).
+
+<!--install-end-->
+
+<!--usage-start-->
 
 ## Usage
 
@@ -133,6 +144,10 @@ tld.extract_scalar("pola-rs.github.io", include_private=True)
 
 Every expression takes the same `include_private` keyword.
 
+<!--usage-end-->
+
+<!--performance-start-->
+
 ## Performance
 
 200,000 URLs, measured with `just bench`:
@@ -161,6 +176,10 @@ A caveat worth stating plainly: if your column has far fewer distinct URLs than 
 `Series.unique()` plus `replace_strict` can still beat any per-row approach, including this one. This package wins on
 columns with high cardinality, and on code you would rather not write.
 
+<!--performance-end-->
+
+<!--correctness-start-->
+
 ## Correctness
 
 The point of this package is not "fast domain parsing" — it is "fast domain parsing you can swap in without your results
@@ -180,6 +199,10 @@ different snapshots.
 
 If you find an input where this package and `tldextract` disagree, that is a bug here. Please
 [open an issue](https://github.com/andrewadlof/polars-tldextract/issues) with the input.
+
+<!--correctness-end-->
+
+<!--psl-start-->
 
 ## The suffix list
 
@@ -221,6 +244,10 @@ markers raises `ValueError` and **leaves the working list untouched**. The marke
 list without them parses as one undifferentiated section, and every private suffix would quietly start counting as an
 ICANN one — wrong output, no signal.
 
+<!--psl-end-->
+
+<!--compat-start-->
+
 ## Compatibility
 
 |         |                                                                        |
@@ -233,18 +260,24 @@ ICANN one — wrong output, no signal.
 
 If a future Polars release bumps the plugin ABI, this package fails loudly at load rather than miscomputing.
 
+<!--compat-end-->
+
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the development loop, the parity requirement, and
-how to refresh the suffix list. [`docs/architecture/overview.md`](docs/architecture/overview.md) explains how this
-implementation maps onto `tldextract`'s, which is worth reading before changing the algorithm.
+Contributions are welcome — see
+[CONTRIBUTING.md](https://github.com/andrewadlof/polars-tldextract/blob/main/CONTRIBUTING.md) for the development loop,
+the parity requirement, and how to refresh the suffix list.
+[`docs/architecture/overview.md`](https://andrewadlof.github.io/polars-tldextract/architecture/overview/) explains how
+this implementation maps onto `tldextract`'s, which is worth reading before changing the algorithm.
 
 ## License
 
-Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT) at your option.
+Licensed under either of
+[Apache License, Version 2.0](https://github.com/andrewadlof/polars-tldextract/blob/main/LICENSE-APACHE) or
+[MIT license](https://github.com/andrewadlof/polars-tldextract/blob/main/LICENSE-MIT) at your option.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this work, as defined
 in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
 Two third-party works are included or drawn upon and keep their own terms — the Public Suffix List (MPL-2.0) and the
-`tldextract` algorithm (BSD-3-Clause). See [NOTICE](NOTICE).
+`tldextract` algorithm (BSD-3-Clause). See [NOTICE](https://github.com/andrewadlof/polars-tldextract/blob/main/NOTICE).

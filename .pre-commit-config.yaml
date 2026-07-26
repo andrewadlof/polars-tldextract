@@ -118,6 +118,12 @@ repos:
         language: system
         types:
           - markdown
+        # The MkDocs pages carry syntax mdformat does not understand and
+        # actively breaks: it collapses mkdocstrings' multi-line `options:`
+        # blocks onto one line, and escapes autorefs `[text][target]` links to
+        # `\[text\][target]`. docs/architecture/ is plain Markdown and stays
+        # covered.
+        exclude: ^docs/(?!architecture/).*\.md$
         args:
           - --number
           - --wrap=120

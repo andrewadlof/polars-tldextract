@@ -1,0 +1,85 @@
+---
+# Builds the MkDocs site and deploys it to GitHub Pages.
+#
+# Deploys only from `main`, so the published site tracks released state rather
+# than whatever is on `development`. Pull requests targeting `main` build the
+# site without deploying, which is what catches a broken include marker or an
+# API reference that no longer resolves.
+#
+# Pages must be enabled once, with Settings -> Pages -> Source: GitHub Actions.
+# Without it the deploy step fails with "Resource not accessible by
+# integration" even though the build succeeded.
+name: Docs
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    name: Build the site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # git-revision-date-localized reads the commit history to stamp each
+          # page; a shallow clone has none and every page falls back to the
+          # build date.
+          fetch-depth: 0
+
+      # The social plugin renders the OG preview images through cairosvg, which
+      # needs the cairo/freetype system libraries -- they are not in the
+      # ubuntu-latest image by default.
+      - name: Install the imaging libraries the social plugin needs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev libfreetype6-dev libffi-dev libjpeg-dev \
+            libpng-dev libz-dev
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - uses: Swatinem/rust-cache@v2
+
+      # Builds the Rust extension into the venv as a side effect. mkdocstrings
+      # needs it importable: the public surface is re-exported from
+      # `polars_tldextract._internal`, a compiled module that static analysis
+      # cannot read.
+      - name: Sync
+        run: uv sync --group docs
+
+      # --strict turns broken links, missing includes and unresolved API
+      # references into failures rather than quiet gaps in the published site.
+      - name: Build
+        env:
+          DISABLE_MKDOCS_2_WARNING: "true"
+        run: uv run --group docs mkdocs build --strict
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+  deploy:
+    name: Deploy to Pages
+    # Pull requests build but do not publish.
+    if: github.event_name != 'pull_request'
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

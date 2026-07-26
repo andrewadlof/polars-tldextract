@@ -1,0 +1,137 @@
+---
+# Documentation site, published to GitHub Pages by .github/workflows/docs.yml.
+#
+# Prose lives in README.md / CONTRIBUTING.md / CHANGELOG.md and is pulled in
+# here by the include-markdown plugin, between `<!--x-start-->` markers. That
+# keeps one source of truth: the README a PyPI visitor reads and the page a
+# site visitor reads are the same bytes, and cannot drift.
+#
+# The API reference is generated from the NumPy docstrings that pydoclint
+# already enforces, so it cannot drift from the code either.
+site_name: polars-tldextract
+site_description: Vectorized, tldextract-compatible URL domain parsing for Polars.
+site_url: https://andrewadlof.github.io/polars-tldextract/
+site_author: Drew Adlof
+repo_url: https://github.com/andrewadlof/polars-tldextract
+repo_name: andrewadlof/polars-tldextract
+# `development` is the default branch and the base for every PR, so "edit this
+# page" should land there rather than on `main`.
+edit_uri: edit/development/docs/
+copyright: MIT OR Apache-2.0. Public Suffix List under MPL-2.0; tldextract algorithm
+  under BSD-3-Clause.
+strict: true
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - content.action.edit
+    - content.code.annotate
+    - content.code.copy
+    - content.tooltips
+    - navigation.indexes
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.suggest
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+plugins:
+  - search
+  - include-markdown
+  - section-index
+  # Resolves `[text][polars_tldextract.fqdn]` to whatever page that object is
+  # rendered on, so a cross-reference survives a page being moved or renamed.
+  # Ships with mkdocstrings; listed explicitly so the ordering is deliberate.
+  - autorefs
+  - git-revision-date-localized:
+      enable_creation_date: false
+      # A shallow clone has no history to read a date from; CI uses
+      # fetch-depth: 0, but a local `just docs` in a shallow clone still works.
+      fallback_to_build_date: true
+  # Renders the OG preview image used when a page is linked. Needs the cairo
+  # and freetype system libraries, which the docs workflow installs.
+  - social
+  - minify:
+      minify_html: true
+      minify_js: true
+      minify_css: true
+      htmlmin_opts:
+        remove_comments: true
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
+            docstring_section_style: table
+            show_source: true
+            # mkdocstrings emits the heading for each object, so the page does
+            # not add its own -- two headings per function would show up twice
+            # in the table of contents.
+            show_root_heading: true
+            heading_level: 3
+            show_root_full_path: false
+            show_signature_annotations: true
+            separate_signature: true
+            line_length: 79
+            merge_init_into_class: true
+            filters:
+              - "!^_"
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  # Diagrams come from Material's built-in mermaid support rather than the
+  # mkdocs-mermaid2 plugin: same ```mermaid fences, no extra dependency, and
+  # the two are known to conflict.
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/andrewadlof/polars-tldextract
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/polars-tldextract/
+nav:
+  - Home: index.md
+  - Usage:
+      - usage.md
+      - psl.md
+  - Performance: performance.md
+  - Correctness: correctness.md
+  - API reference: reference.md
+  - Architecture: architecture/overview.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md

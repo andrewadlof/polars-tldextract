@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 > **Updating this file.** Add a bullet under `## [Unreleased]` as part of your PR. Do **not** bump the version or add a
 > dated `## [X.Y.Z]` section — the version is bumped once, at release time, from everything accumulated under
-> `[Unreleased]`. See [CONTRIBUTING.md](CONTRIBUTING.md).
+> `[Unreleased]`. See [CONTRIBUTING.md](https://github.com/andrewadlof/polars-tldextract/blob/main/CONTRIBUTING.md).
 >
 > **What warrants an entry.** Record *notable*, user-facing changes — new features, behavior or API changes, bug fixes,
 > deprecations, and removals — under the appropriate `Added` / `Changed` / `Fixed` / `Deprecated` / `Removed` heading.
@@ -17,8 +17,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A documentation site (MkDocs + Material), published to <https://andrewadlof.github.io/polars-tldextract/> from `main`.
+  The narrative pages include their content from `README.md` rather than restating it, and the API reference is
+  generated from the NumPy docstrings pydoclint already enforces, so neither can drift from what it documents.
+  `just docs-serve` runs it locally; `just docs` builds it with `--strict`, which turns a broken link or an unresolved
+  API reference into a failure. The `Documentation` project URL now points at the site instead of the README anchor.
+
 ### Changed
 
+- Relative links to repository files in `README.md`, `CONTRIBUTING.md` and `CHANGELOG.md` are now absolute URLs. They
+  resolved on GitHub but nowhere else — PyPI does not rewrite them either, so the links on the published project page
+  were already broken.
 - Releases publish to PyPI with Trusted Publishing (OIDC) instead of a stored API token. The `publish` job now carries
   `permissions: id-token: write` and passes no `password:` — an explicit password silently disabled both Trusted
   Publishing and the PEP 740 attestations `pypa/gh-action-pypi-publish` produces by default, which is why the 0.2.0
@@ -91,7 +102,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   list. A list that fails to parse, or that is missing the ICANN/private section markers, is rejected and the working
   list stays in use. `refresh_psl` is the only function in the package that touches the network, and only when called.
 - Dual licensed MIT OR Apache-2.0. The vendored Public Suffix List keeps its own MPL-2.0 terms and the `tldextract`
-  algorithm its BSD-3-Clause attribution — see [NOTICE](NOTICE).
+  algorithm its BSD-3-Clause attribution — see
+  [NOTICE](https://github.com/andrewadlof/polars-tldextract/blob/main/NOTICE).
 - Wheels for Linux (`manylinux2014` and `musllinux_1_2`, x86_64 and aarch64), macOS (x86_64 and arm64), and Windows (x64
   and arm64), plus an sdist. One wheel per platform, since the extension is built against the stable ABI (`abi3-py310`),
   so a single wheel serves Python 3.10 through 3.13+.

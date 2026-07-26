@@ -13,10 +13,17 @@ version = "0.2.0"
 description = "Vectorized, tldextract-compatible URL domain parsing for Polars."
 readme = "README.md"
 requires-python = ">=3.10"
-keywords = ["polars", "plugin", "tldextract", "public-suffix-list", "url", "domain"]
+keywords = [
+  "domain",
+  "plugin",
+  "polars",
+  "public-suffix-list",
+  "tldextract",
+  "url",
+]
 authors = [{ name = "Drew Adlof", email = "drew.adlof@gmail.com" }]
 license = "MIT OR Apache-2.0"
-license-files = ["LICENSE-MIT", "LICENSE-APACHE", "NOTICE"]
+license-files = ["LICENSE-APACHE", "LICENSE-MIT", "NOTICE"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
@@ -40,7 +47,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/andrewadlof/polars-tldextract"
 Repository = "https://github.com/andrewadlof/polars-tldextract"
-Documentation = "https://github.com/andrewadlof/polars-tldextract#readme"
+Documentation = "https://andrewadlof.github.io/polars-tldextract/"
 Issues = "https://github.com/andrewadlof/polars-tldextract/issues"
 Changelog = "https://github.com/andrewadlof/polars-tldextract/blob/main/CHANGELOG.md"
 
@@ -74,6 +81,30 @@ dev = [
   "ty>=0.0.1a20",
   "yamlfix>=1.17.0",
   "ziglang>=0.13.0",
+]
+# Kept out of `dev` (and out of `default-groups`) so the everyday `uv sync` and
+# CI's test jobs do not pay for the docs toolchain. `just docs` and the docs
+# workflow ask for this group explicitly.
+docs = [
+  # Pulls README/CHANGELOG/CONTRIBUTING sections into the site so there is one
+  # source of truth and the two cannot drift.
+  "mkdocs-include-markdown-plugin>=7.1.5",
+  # "Last updated" stamps, read from git history. Needs fetch-depth: 0 in CI.
+  "mkdocs-git-revision-date-localized-plugin>=1.3.0",
+  # Strips whitespace/comments out of the generated HTML.
+  "mkdocs-minify-plugin>=0.8.0",
+  # Lets a nav section header double as its own landing page.
+  "mkdocs-section-index>=0.3.9",
+  # `imaging` pulls in pillow + cairosvg for the social-card plugin, which
+  # renders the OG preview images used when a page is linked.
+  "mkdocs-material[imaging]>=9.6.0",
+  "mkdocs>=1.6.1",
+  # Renders the API reference from the NumPy docstrings pydoclint already
+  # enforces. Needs the compiled extension importable: the public surface is
+  # re-exported from `polars_tldextract._internal`, which is a .so that no
+  # amount of static analysis can read.
+  "mkdocstrings-python>=1.13.0",
+  "mkdocstrings>=0.28.0",
 ]
 
 
@@ -467,20 +498,20 @@ ignore = [
   # Dynamically typed expressions (typing.Any) are disallowed
   "any-type",
   # Pydocstyle D rules for docstrings
-  "undocumented-public-module", # Missing docstring in public module
-  "undocumented-public-package", # Missing docstring in public package
-  "undocumented-public-init", # Missing docstring in __init__ method
-  "unnecessary-multiline-docstring", # One-line docstring should fit on one line with quotes
+  "undocumented-public-module",        # Missing docstring in public module
+  "undocumented-public-package",       # Missing docstring in public package
+  "undocumented-public-init",          # Missing docstring in __init__ method
+  "unnecessary-multiline-docstring",   # One-line docstring should fit on one line with quotes
   "incorrect-blank-line-before-class", # 1 blank line required before class docstring (conflict with D211: No blank lines allowed before class
   # docstring)
-  "missing-blank-line-after-summary", # 1 blank line required between summary line and description
-  "multi-line-summary-first-line", # Multi-line docstring summary should start at the first line
-  "multi-line-summary-second-line", # Multi-line docstring summary should start at the second line (conflict with D212)
-  "signature-in-docstring", # First line should not be the function's "signature"
+  "missing-blank-line-after-summary",      # 1 blank line required between summary line and description
+  "multi-line-summary-first-line",         # Multi-line docstring summary should start at the first line
+  "multi-line-summary-second-line",        # Multi-line docstring summary should start at the second line (conflict with D212)
+  "signature-in-docstring",                # First line should not be the function's "signature"
   "missing-blank-line-after-last-section", # Missing blank line after last section
-  "missing-terminal-punctuation", # First line should end with a period, question mark, or exclamation point
-  "missing-section-name-colon", # Section name should end with a semicolon
-  "undocumented-param", # Missing arguments in the docstring argument section
+  "missing-terminal-punctuation",          # First line should end with a period, question mark, or exclamation point
+  "missing-section-name-colon",            # Section name should end with a semicolon
+  "undocumented-param",                    # Missing arguments in the docstring argument section
   # Too many branches
   "too-many-branches",
   # Too many arguments to function call
@@ -512,24 +543,24 @@ typing-modules = []
 # # Per-file specific linting ignores for certain directories/file patterns
 [tool.ruff.lint.extend-per-file-ignores]
 "tests/*" = [
-  "ANN",     # Ignore requirement for type annotations in tests
-  "undocumented-public-function",    # Ignore missing docstring in public function
-  "import-private-name", # Custom rule example (if exists)
+  "ANN",                          # Ignore requirement for type annotations in tests
+  "undocumented-public-function", # Ignore missing docstring in public function
+  "import-private-name",          # Custom rule example (if exists)
 ]
 "notebooks/*" = [
-  "missing-type-function-argument",  # Ignore missing type annotation for notebook files
-  "missing-return-type-private-function",  # Ignore missing return type annotation for notebook files
-  "useless-expression",    # Ignore use of assert for notebook files
-  "blind-except",  # Ignore blind exception rule for notebook files
-  "module-import-not-at-top-of-file",    # Databricks notebooks have imports between COMMAND cells
-  "true-false-comparison",    # Polars requires == True/False for column comparisons (not bare expressions)
-  "undefined-name",    # Databricks provides globals like `spark` at runtime
-  "invalid-argument-name",    # Ignore argument name should be lowercase for notebook files
-  "import-outside-top-level", # Ignore f-string docstring rule for notebook files
-  "too-many-locals", # Ignore too many local variables for notebook files
-  "too-many-statements", # Ignore too many statements for notebook files
-  "used-dummy-variable",  # Marimo uses _ prefix for cell-private variables (not dummy variables)
-  "try-except-continue",    # try-except-continue used for graceful degradation in notebooks
+  "missing-type-function-argument",       # Ignore missing type annotation for notebook files
+  "missing-return-type-private-function", # Ignore missing return type annotation for notebook files
+  "useless-expression",                   # Ignore use of assert for notebook files
+  "blind-except",                         # Ignore blind exception rule for notebook files
+  "module-import-not-at-top-of-file",     # Databricks notebooks have imports between COMMAND cells
+  "true-false-comparison",                # Polars requires == True/False for column comparisons (not bare expressions)
+  "undefined-name",                       # Databricks provides globals like `spark` at runtime
+  "invalid-argument-name",                # Ignore argument name should be lowercase for notebook files
+  "import-outside-top-level",             # Ignore f-string docstring rule for notebook files
+  "too-many-locals",                      # Ignore too many local variables for notebook files
+  "too-many-statements",                  # Ignore too many statements for notebook files
+  "used-dummy-variable",                  # Marimo uses _ prefix for cell-private variables (not dummy variables)
+  "try-except-continue",                  # try-except-continue used for graceful degradation in notebooks
 ]
 
 # Settings specific to pytest-style checks in flake8
